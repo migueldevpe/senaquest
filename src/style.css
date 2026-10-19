@@ -1,0 +1,942 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+:root {
+  font-family: 'Poppins', system-ui, sans-serif;
+  color: #fff;
+  background: #10263b;
+  font-synthesis: none;
+  --blue: #004a8d;
+  --orange: #f7941d;
+  --light: #fdc180;
+  /* Padrão global para painéis, modais e superfícies flutuantes. */
+  --ui-modal-radius: 1rem;
+  --ui-inner-radius: 0.5rem;
+  --ui-button-radius: 0.875rem;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 0;
+  border-radius: var(--ui-button-radius);
+  padding: 12px 18px;
+  background: var(--orange);
+  color: #111827;
+  font-weight: 700;
+  transition: filter 0.2s;
+}
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button:focus-visible {
+  outline: 3px solid white;
+  outline-offset: 3px;
+}
+.app {
+  height: 100vh;
+  min-height: 600px;
+  overflow: hidden;
+  position: relative;
+}
+.world {
+  position: absolute;
+  inset: 0;
+}
+.header {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: none;
+  pointer-events: none;
+}
+.header > * {
+  pointer-events: auto;
+}
+.header strong {
+  font-size: 24px;
+  letter-spacing: 0.7px;
+}
+.header strong span {
+  color: var(--orange);
+}
+.header small {
+  display: block;
+  font-size: 11px;
+  color: #e2eaf3;
+}
+.vr {
+  color: white;
+  background: var(--blue);
+  border: 1px solid var(--orange);
+}
+.hud {
+  position: absolute;
+  bottom: 42px;
+  right: 16px;
+  width: 238px;
+  padding: 16px;
+  background: #003b6ded;
+  border: 1px solid var(--orange);
+  border-radius: var(--ui-modal-radius);
+  box-shadow: 0 14px 35px #001b3280;
+}
+.hud strong {
+  font-size: 14px;
+}
+.eyebrow {
+  color: var(--light);
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.scoreboard-label {
+  margin-top: 16px;
+}
+.score {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  margin-top: 7px;
+}
+.score b {
+  color: var(--light);
+}
+.panel {
+  position: absolute;
+  bottom: 58px;
+  left: 18px;
+  width: min(430px, calc(100vw - 290px));
+  max-height: 76vh;
+  overflow: auto;
+  padding: 24px;
+  background: #003b6af3;
+  border: 1px solid var(--orange);
+  border-radius: var(--ui-modal-radius);
+  box-shadow: 0 20px 50px #001b328c;
+}
+.panel h1 {
+  font-size: 24px;
+  margin: 0 0 10px;
+}
+.panel h2 {
+  font-size: 20px;
+  margin: 0 0 12px;
+  color: var(--light);
+}
+.panel p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #f2f6fc;
+}
+.panel button {
+  margin: 5px 6px 5px 0;
+}
+.panel .secondary {
+  color: var(--blue);
+  background: white;
+}
+.courses,
+.rolls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.courses button {
+  min-height: 55px;
+  text-align: left;
+  font-size: 12px;
+}
+.rolls span {
+  background: #195785;
+  padding: 12px;
+  border-radius: var(--ui-inner-radius);
+  font-size: 12px;
+}
+.visible-timer {
+  margin-bottom: 19px;
+  background: #ffffff13;
+  border-radius: var(--ui-inner-radius);
+  padding: 11px 12px;
+}
+.timer-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  gap: 8px;
+}
+.timer-caption strong {
+  color: var(--light);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.timer-track {
+  height: 9px;
+  background: #ffffff36;
+  border-radius: 9px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.timer-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--orange);
+  backface-visibility: hidden;
+  transform-origin: left center;
+  animation-name: timer-drain;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+@keyframes timer-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+.quiz-panel,
+.feedback-panel {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 6vh;
+  width: min(750px, calc(100vw - 310px));
+  max-height: 82vh;
+}
+.quiz-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+}
+.quiz-area {
+  background: var(--orange);
+  color: #142333;
+  font-weight: 700;
+  padding: 7px 13px;
+  border-radius: 20px;
+}
+.panel .quiz-prompt {
+  color: white;
+  font-size: clamp(19px, 2.4vw, 27px);
+  text-align: center;
+  margin: 20px 0;
+  line-height: 1.4;
+}
+.kahoot-answers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 11px;
+}
+.panel .kahoot-answer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  min-height: 80px;
+  padding: 12px 14px;
+  text-align: left;
+  color: white;
+  line-height: 1.4;
+  font-size: 14px;
+  box-shadow: 0 4px 0 #0005;
+}
+.answer-symbol {
+  font-size: 27px;
+  flex-shrink: 0;
+}
+.answer-0 {
+  background: #d93c50;
+}
+.answer-1 {
+  background: #2274c8;
+}
+.answer-2 {
+  background: #c48b13;
+}
+.answer-3 {
+  background: #23875c;
+}
+.bot-thinking {
+  background: #125582;
+  padding: 24px;
+  border-radius: var(--ui-inner-radius);
+  text-align: center;
+  font-size: 15px;
+}
+.quiz-feedback {
+  text-align: center;
+}
+.feedback-icon {
+  display: grid;
+  place-items: center;
+  width: 75px;
+  height: 75px;
+  border-radius: 50%;
+  margin: 0 auto 14px;
+  background: #159e6b;
+  font-size: 45px;
+  font-weight: 800;
+}
+.feedback-icon.wrong {
+  background: #d83b53;
+}
+.feedback-icon.timeout {
+  background: #aa7a25;
+}
+.quiz-feedback h2 {
+  color: white;
+  font-size: 24px;
+}
+.answer-explanation {
+  background: #ffffff19;
+  padding: 16px;
+  border-radius: var(--ui-inner-radius);
+  text-align: left;
+  margin: 14px 0;
+}
+.answer-explanation > span {
+  display: block;
+  color: var(--light);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.answer-explanation > strong {
+  display: block;
+  margin-top: 6px;
+}
+.answer-explanation p {
+  margin-bottom: 0;
+}
+footer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 9px;
+  background: #00365acb;
+  text-align: center;
+  font-size: 10px;
+  color: #dce6f0;
+  pointer-events: none;
+}
+@media (max-width: 900px) {
+  .hud {
+    width: 170px;
+    padding: 11px;
+    right: 10px;
+    bottom: 43px;
+  }
+  .panel {
+    width: min(410px, calc(100vw - 210px));
+  }
+  .quiz-panel,
+  .feedback-panel {
+    width: calc(100vw - 24px);
+  }
+}
+@media (max-width: 600px) {
+  .app {
+    min-height: 760px;
+  }
+  .hud {
+    top: 68px;
+    bottom: auto;
+  }
+  .panel {
+    left: 12px;
+    bottom: 40px;
+    width: calc(100vw - 24px);
+    max-height: 59vh;
+  }
+  .quiz-panel,
+  .feedback-panel {
+    left: 50%;
+  }
+  .kahoot-answers {
+    grid-template-columns: 1fr;
+  }
+  .panel .kahoot-answer {
+    min-height: 54px;
+  }
+}
+
+.debug-panel {
+  position: fixed;
+  right: 12px;
+  top: 76px;
+  z-index: 50;
+  background: #004a8d;
+  color: white;
+  padding: 8px;
+  border-radius: var(--ui-modal-radius);
+  max-width: 240px;
+}
+.debug-panel button {
+  display: block;
+  padding: 8px;
+  margin: 3px 0;
+  border: 0;
+  border-radius: var(--ui-button-radius);
+  cursor: pointer;
+  background: #f7941d;
+  color: #111;
+}
+.debug-body {
+  display: grid;
+  gap: 5px;
+  padding-top: 8px;
+}
+
+.large-text .panel {
+  font-size: 1.13em;
+}
+.large-text .quiz-prompt {
+  font-size: 1.45em;
+}
+.reduced-effects .panel,
+.reduced-effects .hud {
+  backdrop-filter: none;
+}
+.score-active {
+  background: #f7941d33;
+  border-left: 3px solid #f7941d;
+  padding-left: 5px;
+}
+.pedagogical-label {
+  font-size: 12px;
+  color: #fdc180;
+  font-weight: 700;
+}
+.debug-panel {
+  top: 74px;
+  bottom: auto;
+  left: auto;
+  right: 12px;
+}
+
+/* Sorteio compacto e indicação clara do participante ativo. */
+.panel:has(.rolls) {
+  padding: 17px 20px;
+}
+.panel:has(.rolls) h2 {
+  margin-bottom: 5px;
+}
+.panel:has(.rolls) p {
+  margin: 7px 0;
+}
+.rolls span.lottery-active {
+  outline: 2px solid #f7941d;
+  background: #235f91;
+}
+
+/* The WebGL canvas must fill the viewport, never collapse to intrinsic height. */
+.world {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+}
+.world > div:first-child {
+  width: 100%;
+  height: 100%;
+}
+
+/* v2.5.5: legibilidade das perguntas e respostas, sem alterar regras. */
+.quiz-panel {
+  border: 2px solid #f5a53c;
+  box-shadow: 0 18px 56px #001528bd;
+}
+.quiz-top {
+  padding-bottom: 12px;
+  border-bottom: 1px solid #ffffff36;
+}
+.panel .quiz-prompt {
+  max-width: 66ch;
+  margin: 22px auto;
+  font-weight: 650;
+}
+.panel .kahoot-answer {
+  border: 2px solid #ffffff45;
+  border-radius: var(--ui-button-radius);
+  box-shadow: inset 0 -3px 0 #0003;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease;
+}
+.panel .kahoot-answer:hover {
+  border-color: white;
+  transform: translateY(-2px);
+}
+.panel .kahoot-answer:focus-visible {
+  outline: 4px solid #ffffff;
+  outline-offset: 3px;
+}
+.answer-symbol {
+  background: #0b233a55;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel .kahoot-answer {
+    transition: none;
+  }
+  .panel .kahoot-answer:hover {
+    transform: none;
+  }
+}
+
+.turn-rank {
+  display: inline-block;
+  min-width: 2.2em;
+  margin-right: 6px;
+  padding: 2px 4px;
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  border-radius: 5px;
+  color: #fff;
+  background: #102d4c;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* Placar: classificacao dinamica distinta da ordem fixa sorteada. */
+.hud {
+  width: min(405px, calc(100vw - 32px));
+  padding: 17px 18px;
+}
+.score-explainer,
+.score-footnote {
+  font-size: 10px;
+  color: #d3e4f1;
+  line-height: 1.4;
+}
+.score-footnote {
+  margin-top: 10px;
+}
+.score-head,
+.score-grid {
+  display: grid;
+  grid-template-columns: 37px minmax(88px, 1fr) 49px 48px 53px;
+  gap: 5px;
+  align-items: center;
+}
+.score-head {
+  margin-top: 12px;
+  font-size: 9px;
+  letter-spacing: 0.35px;
+  color: #bed6e7;
+  font-weight: 700;
+}
+.score-grid {
+  padding: 7px 4px;
+  border-radius: var(--ui-inner-radius);
+  margin-top: 4px;
+  font-size: 11px;
+}
+.score-grid > :nth-child(n + 3),
+.score-head > :nth-child(n + 3) {
+  text-align: center;
+}
+.score-grid .score-position {
+  font-weight: 800;
+  color: #fff;
+}
+.score-grid .score-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.score-grid .score-points {
+  color: #ffbc6b;
+}
+.score-grid .score-house {
+  font-variant-numeric: tabular-nums;
+}
+.score-now {
+  color: #ffb24d;
+  margin-left: 5px;
+}
+.score-grid.score-active {
+  background: #f7941d29;
+  border-left: 3px solid #f7941d;
+  padding-left: 1px;
+}
+@media (max-width: 700px) {
+  .hud {
+    width: min(355px, calc(100vw - 24px));
+    right: 12px;
+    bottom: 12px;
+    padding: 12px;
+  }
+  .score-head,
+  .score-grid {
+    grid-template-columns: 32px minmax(72px, 1fr) 43px 40px 46px;
+    gap: 3px;
+    font-size: 10px;
+  }
+}
+
+/* Linhas animadas por FLIP somente em trocas reais de classificacao. */
+.score-grid {
+  position: relative;
+  will-change: auto;
+}
+@media (prefers-reduced-motion: reduce) {
+  .score-grid {
+    transition: none !important;
+  }
+}
+
+/* v2.6.1: espacos consistentes, indicador ANTES do nome; preserva animacao FLIP. */
+.score-head,
+.score-grid {
+  grid-template-columns: 43px minmax(100px, 1fr) 49px 48px 53px;
+  column-gap: 7px;
+}
+.score-head {
+  padding-inline: 12px;
+}
+.score-grid {
+  padding: 9px 12px;
+  box-sizing: border-box;
+}
+.score-grid.score-active {
+  padding-left: 9px;
+  border-left: 3px solid #f7941d;
+}
+.score-grid .score-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.score-now {
+  flex: none;
+  display: inline-block;
+  width: 3px;
+  height: 14px;
+  border-radius: 3px;
+  background: #ffb24d;
+  margin: 0;
+}
+@media (max-width: 700px) {
+  .score-head,
+  .score-grid {
+    grid-template-columns: 36px minmax(76px, 1fr) 43px 40px 46px;
+    gap: 4px;
+  }
+  .score-head {
+    padding-inline: 9px;
+  }
+  .score-grid {
+    padding: 8px 9px;
+  }
+  .score-grid.score-active {
+    padding-left: 6px;
+  }
+}
+
+/* v2.6.2: indicador único, somente junto ao nome, com cor do pino. */
+.score-grid.score-active {
+  border-left: 0;
+  padding-left: 12px;
+  background: rgba(255, 255, 255, 0.12);
+}
+.score-grid .score-name {
+  gap: 5px;
+}
+.score-now {
+  margin: 0;
+  width: 4px;
+  height: 15px;
+}
+@media (max-width: 700px) {
+  .score-grid.score-active {
+    padding-left: 9px;
+  }
+}
+
+/* Contorno de seleção igual ao painel esquerdo, sem perder a barrinha por jogador. */
+.score-grid.score-active {
+  border: 2px solid #f7941d;
+  border-radius: var(--ui-inner-radius);
+  padding: 7px 10px;
+  background: rgba(35, 95, 145, 0.35);
+  box-sizing: border-box;
+}
+@media (max-width: 700px) {
+  .score-grid.score-active {
+    padding: 6px 7px;
+  }
+}
+
+/* Identidade dos botoes do quiz aplicada aos controles da interface. */
+.app button:not(.kahoot-answer) {
+  border: 2px solid #ffffff45;
+  border-radius: var(--ui-button-radius);
+  box-shadow: inset 0 -3px 0 #0003;
+  transition:
+    transform 0.12s ease,
+    border-color 0.12s ease,
+    filter 0.12s ease;
+}
+.app button:hover:not(:disabled) {
+  border-color: #fff;
+  transform: translateY(-2px);
+}
+.app button:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px #0004;
+}
+.app button:focus-visible {
+  outline: 4px solid #fff;
+  outline-offset: 3px;
+}
+.app button.secondary {
+  background: #2274c8;
+  color: white;
+}
+
+.debug-panel {
+  top: 15px;
+  right: 18px;
+  background: transparent;
+  padding: 0;
+  max-width: min(320px, calc(100vw - 36px));
+}
+.debug-panel .settings-toggle {
+  background: #003b6af3;
+  color: white;
+  border-color: #f7941d;
+}
+.settings-menu {
+  margin-top: 8px;
+  background: #003b6af3;
+  border: 1px solid #f7941d;
+  border-radius: var(--ui-modal-radius);
+  padding: 12px;
+  box-shadow: 0 14px 35px #001b3280;
+  display: grid;
+  gap: 8px;
+}
+.debug-panel button {
+  width: 100%;
+  margin: 0;
+  text-align: left;
+}
+.debug-details {
+  border-top: 1px solid #ffffff36;
+  padding-top: 8px;
+}
+.debug-details summary {
+  cursor: pointer;
+  padding: 7px;
+  font-weight: 700;
+}
+.debug-body {
+  padding: 8px 0 0;
+}
+.debug-body label {
+  font-size: 12px;
+}
+.debug-body input[type='range'] {
+  width: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app button {
+    transition: none !important;
+  }
+  .app button:hover:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Botões comuns centralizados; alternativas do quiz preservam alinhamento original. */
+.app button:not(.kahoot-answer) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+}
+.app .kahoot-answer {
+  justify-content: flex-start;
+  text-align: left;
+}
+/* Checkbox da depuração: caixa e texto alinhados sem afetar sliders. */
+.debug-body label:has(input[type='checkbox']) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.debug-body label input[type='checkbox'] {
+  margin: 0;
+  flex: none;
+}
+.sound-volume-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+}
+.settings-menu > input[type='range'] {
+  width: 100%;
+  accent-color: #f7941d;
+  cursor: pointer;
+}
+
+/* v2.7.0 — area util unica para a interface. O footer e a cena 3D
+   permanecem fora da area segura. */
+:root {
+  /* Zona segura externa; o footer permanece fixo na borda inferior. */
+  --ui-edge: 16px;
+  --ui-panel-padding: 20px;
+  --ui-section-gap: 16px;
+  --ui-element-gap: 8px;
+  --ui-footer-space: 32px;
+  --ui-bottom: calc(var(--ui-edge) + var(--ui-footer-space));
+}
+/* Cabecalho usa a mesma margem do HUD e do painel. */
+.app .header {
+  top: var(--ui-edge);
+  left: var(--ui-edge);
+  right: var(--ui-edge);
+  padding: 0;
+  background: none;
+}
+.app .hud {
+  right: var(--ui-edge);
+  bottom: var(--ui-bottom);
+}
+.app .panel {
+  left: var(--ui-edge);
+  bottom: var(--ui-bottom);
+  max-height: calc(100dvh - var(--ui-edge) - var(--ui-bottom));
+}
+.app .quiz-panel,
+.app .feedback-panel {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: var(--ui-bottom);
+  max-height: calc(100dvh - var(--ui-edge) - var(--ui-bottom));
+}
+.app .debug-panel {
+  top: var(--ui-edge);
+  right: var(--ui-edge);
+  max-width: min(320px, calc(100vw - 2 * var(--ui-edge)));
+}
+.app footer {
+  bottom: 0;
+  left: 0;
+  right: 0;
+}
+@media (max-width: 900px) {
+  .app .panel:not(.quiz-panel):not(.feedback-panel) {
+    width: min(410px, calc(100vw - 210px));
+  }
+  .app .quiz-panel,
+  .app .feedback-panel {
+    width: min(750px, calc(100vw - 2 * var(--ui-edge)));
+  }
+}
+@media (max-width: 600px) {
+  :root {
+    --ui-edge: 12px;
+  }
+  .app .hud {
+    top: 68px;
+    bottom: auto;
+    right: var(--ui-edge);
+  }
+  .app .panel:not(.quiz-panel):not(.feedback-panel) {
+    width: calc(100vw - 2 * var(--ui-edge));
+    max-height: min(59dvh, calc(100dvh - var(--ui-edge) - var(--ui-bottom)));
+  }
+  .app .quiz-panel,
+  .app .feedback-panel {
+    width: calc(100vw - 2 * var(--ui-edge));
+  }
+}
+
+/* Degradê fora da área segura: cobre toda a largura, sem bordas laterais. */
+.app .game-top-overlay {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 110px;
+  background-image: linear-gradient(
+    to bottom,
+    rgba(0, 43, 73, 0.85) 0%,
+    rgba(0, 43, 73, 0.4) 45%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 2;
+}
+.app .header,
+.app .debug-panel {
+  z-index: 3;
+}
+.quiz-destination {
+  align-self: flex-end;
+  text-align: right;
+}
+
+/* Contorno externo padronizado pela borda do modal central. */
+:root {
+  --ui-modal-border: 2px solid #f5a53c;
+}
+.app .panel,
+.app .hud {
+  border: var(--ui-modal-border);
+}
+
+/* Convenção de design: qualquer novo modal usa a classe .ui-modal. */
+.ui-modal,
+.app .panel,
+.app .hud,
+.app .settings-menu,
+.app .debug-panel {
+  border-radius: var(--ui-modal-radius);
+}
+
+.debug-simulations {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid #6588a5;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+.debug-simulations legend {
+  font-weight: 700;
+}
+.debug-simulations select {
+  width: 100%;
+  padding: 7px;
+  background: #0a365c;
+  color: white;
+  border: 1px solid #83a7c8;
+  border-radius: 7px;
+}
