@@ -14,7 +14,7 @@ const SOUND_PRESETS: Record<Sound, [number, number, number, OscillatorType]> = {
   finish: [670, 1040, 0.36, 'sine'],
 };
 
-let volume = SOUND_CONFIG.defaultVolume;
+let volume: number = SOUND_CONFIG.defaultVolume;
 let audio: AudioContext | null = null;
 type Sound =
   | 'step'

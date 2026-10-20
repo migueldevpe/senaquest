@@ -242,7 +242,7 @@ function DieBody({
     const offset = retry ? 0.02 : 0;
     rigid.setTranslation({ x: origin[0], y: origin[1] + offset, z: origin[2] }, true);
     rigid.setRotation({ x: 0, y: 0, z: 0, w: 1 }, true);
-    rigid.setLinvel({ x: dx * 1.88, y: 0.53, z: dz * 1.88 }, true);
+    rigid.setLinvel({ x: dx * 1.88, y: 1.3, z: dz * 1.88 }, true);
     rigid.setAngvel({ x: 0, y: 0, z: 0 }, true);
     // Impulso moderado, originado do lado correto, com pequena variação por lançamento.
     const drift = (Math.random() - 0.5) * 0.13;
@@ -250,7 +250,7 @@ function DieBody({
     rigid.applyImpulse(
       {
         x: dx * strength + (dz !== 0 ? drift * strength : 0),
-        y: strength * (0.18 + Math.random() * 0.09),
+        y: strength * (0.25 + Math.random() * 0.09),
         z: dz * strength + (dx !== 0 ? drift * strength : 0),
       },
       true,

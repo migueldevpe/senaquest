@@ -82,7 +82,7 @@ function Confetti({ winner }: { winner: number }) {
   );
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry();
-    const count = 240;
+    const count = 320;
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     const palette = ['#F7941D', '#004A8D', '#f6d14b', '#30bca0', '#b376dd'];
@@ -92,9 +92,9 @@ function Confetti({ winner }: { winner: number }) {
       winner === 1 ? [3.18, 0] : winner === 2 ? [0, -3.18] : winner === 3 ? [-3.18, 0] : [0, 2.35];
     for (let i = 0; i < count; i++) {
       const a = i * 2.399963;
-      const radius = 0.25 + (((i * 37) % 100) / 100) * 0.82;
+      const radius = 0.45 + Math.sqrt(((i * 37) % 100) / 100) * 1.45;
       positions[i * 3] = center[0] + Math.cos(a) * radius;
-      positions[i * 3 + 1] = 2.9 + (((i * 29) % 100) / 100) * 1.5;
+      positions[i * 3 + 1] = 2.5 + (((i * 29) % 100) / 100) * 2.0;
       positions[i * 3 + 2] = center[1] + Math.sin(a) * radius;
       const color = new THREE.Color(palette[i % palette.length]);
       colors.set([color.r, color.g, color.b], i * 3);

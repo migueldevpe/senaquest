@@ -2,7 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
 import { CharacterName } from './CharacterName';
-import { XR, createXRStore } from '@react-three/xr';
+import { XR, XROrigin, createXRStore } from '@react-three/xr';
+import { VRInterface } from './VRInterface';
 import * as THREE from 'three';
 import { COLORS, NAMES, colorIndex } from '../game/data';
 import { PLAYER_COLORS } from '../game/playerVisual';
@@ -177,6 +178,12 @@ function Token({ index, boardFade }: { index: number; boardFade: React.RefObject
     destination.current = position;
   }, [position]);
   useFrame((_, delta) => {
+    // A new course/restart must not animate hidden tokens back through every tile.
+    if (boardFade.current < 0.05 && destination.current === 0 && current.current !== 0) {
+      current.current = 0;
+      from.current = 0;
+      step.current = 0;
+    }
     const target = active ? BOARD_VISUAL.activePawnOpacity : 1;
     alpha.current = THREE.MathUtils.damp(alpha.current, target, BOARD_VISUAL.pawnFadeSpeed, delta);
     if (Math.abs(alpha.current - target) < 0.001) alpha.current = target;
@@ -204,7 +211,7 @@ function Token({ index, boardFade }: { index: number; boardFade: React.RefObject
         current.current = next;
         from.current = next;
         step.current = 0;
-        playSound('step');
+        if (boardFade.current > 0.5 && destination.current !== 0) playSound('step');
       }
     } else {
       const b =
@@ -1080,6 +1087,8 @@ export function World() {
         gl={{ antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: false }}
       >
         <XR store={xrStore}>
+          <XROrigin position={[0, 0.28, 3.32]} />
+          <VRInterface />
           <Classroom />
           <Board />
         </XR>

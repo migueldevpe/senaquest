@@ -1,18 +1,9 @@
-# Dependências
 node_modules/
-
-# Arquivos gerados pelo Vite
 dist/
 dist-ssr/
-
-# Logs
 *.log
 npm-debug.log*
-
-# Configurações locais
 .env.local
 .env.*.local
-
-# Arquivos temporários
 .DS_Store
 Thumbs.db

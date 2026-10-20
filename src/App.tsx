@@ -403,6 +403,19 @@ function App() {
               ? AUTO_TIMES[game.phase as AutoPhase]
               : 0;
   const timerKey = `${game.phase}-${game.turnIndex}-${game.lotteryIndex}-${game.lotteryNonce}-${game.throwNonce}-${game.activeQuestion?.id ?? ''}`;
+  // The VR tablet reads the exact same clock as the desktop HUD.
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent('senaquest:clock', {
+        detail: {
+          phase: game.phase,
+          seconds: time,
+          duration: timerDuration,
+          deadline: timerDeadline?.deadline,
+        },
+      }),
+    );
+  }, [game.phase, time, timerDuration, timerDeadline?.deadline]);
   const showPanel = !['choose', 'confirm'].includes(game.phase);
 
   return (
