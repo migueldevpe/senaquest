@@ -1,3 +1,5 @@
+import { loadPoppinsCanvas } from './poppins';
+import { POPPINS_3D } from './poppins';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
@@ -8,7 +10,9 @@ import { VRTabletScreen } from './VRTabletScreen';
 import { useGame, currentPlayer, currentQuestion } from '../game/store';
 
 const NAVY = '#003b6a';
-const ORANGE = '#ff981a';
+// Um único deslocamento local para os três tablets dos bots.
+// Z negativo aproxima os tablets da mesa, sem afetar o jogador principal.
+const BOT_TABLET_EDGE_OFFSET = -0.075;
 
 /** HUD rendered once as a transparent, head-locked WebXR surface.
  * All visual components share one canvas to avoid text z-fighting and scene occlusion.
@@ -18,49 +22,85 @@ const HUD_H = 1152;
 const HUD_PLANE_W = 2.72;
 const HUD_PLANE_H = (HUD_PLANE_W * HUD_H) / HUD_W;
 const HUD_DISTANCE = 1.45;
+// Atraso angular discreto: sensação de profundidade sem atualizar React a cada frame.
+const SCORE_PARALLAX_SMOOTHING = 9;
+const SCORE_MAX_TILT_RAD = THREE.MathUtils.degToRad(5);
 
 function HudArtwork({
   ranking,
   players,
   course,
-  gradient,
-  showScore,
   active,
   order,
 }: {
   ranking: number[];
   players: { correct: number; position: number }[];
   course: string;
-  gradient: boolean;
-  showScore: boolean;
   active: number | null;
   order: number[];
 }) {
-  const texture = useMemo(() => {
+  // Keep one GPU texture; update the existing canvas only when data changes or
+  // while the ranking rows are moving. This restores animated classification.
+  const surface = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = HUD_W;
     canvas.height = HUD_H;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return { canvas, texture };
+  }, []);
+  const positions = useRef<number[]>([0, 1, 2, 3]);
+  useEffect(() => {
+    let alive = true;
+    void loadPoppinsCanvas()
+      .then(() => {
+        if (alive) dirty.current = true;
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const previousRanking = useRef<number[]>([]);
+  const dirty = useRef(true);
+  useEffect(() => {
+    dirty.current = true;
+  }, [ranking.join(','), players, course, active, order.join(',')]);
+  useEffect(() => () => surface.texture.dispose(), [surface]);
+  useFrame((_, dt) => {
+    const ctx = surface.canvas.getContext('2d');
+    if (!ctx) return;
+    if (previousRanking.current.length === 0) {
+      ranking.forEach((id, index) => {
+        positions.current[id] = index;
+      });
+      previousRanking.current = [...ranking];
+      dirty.current = true;
+    }
+    let moving = false;
+    for (let i = 0; i < ranking.length; i++) {
+      const id = ranking[i];
+      const current = positions.current[id] ?? i;
+      const next = THREE.MathUtils.damp(current, i, 9, Math.min(dt, 0.05));
+      positions.current[id] = Math.abs(next - i) < 0.002 ? i : next;
+      if (positions.current[id] !== i) moving = true;
+    }
+    if (!moving && !dirty.current) return;
+    dirty.current = false;
+    ctx.clearRect(0, 0, HUD_W, HUD_H);
     const rounded = (x: number, y: number, w: number, h: number, r: number) => {
       ctx.beginPath();
       ctx.roundRect(x, y, w, h, r);
     };
-    const text = (
-      label: string,
-      x: number,
-      y: number,
-      font: string,
-      color: string,
-      align: CanvasTextAlign = 'left',
-    ) => {
-      ctx.textAlign = align;
+    const text = (label: string, x: number, y: number, font: string, color: string) => {
+      ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
       ctx.font = font;
       ctx.fillStyle = color;
       ctx.fillText(label, x, y);
     };
-    const wrap = (value: string, maxWidth: number, font: string, maxLines = 2) => {
+    const wrap = (value: string, maxWidth: number, font: string) => {
       ctx.font = font;
       const lines: string[] = [];
       let current = '';
@@ -72,157 +112,78 @@ function HudArtwork({
         } else current = next;
       }
       if (current) lines.push(current);
-      return lines.slice(0, maxLines);
+      return lines.slice(0, 2);
     };
-    // Edge-aligned header, fading into the scene without a visible rectangle.
-    if (gradient) {
-      const g = ctx.createLinearGradient(0, 0, 0, 160);
-      g.addColorStop(0, 'rgba(5,39,64,0.87)');
-      g.addColorStop(0.42, 'rgba(5,39,64,0.47)');
-      g.addColorStop(1, 'rgba(5,39,64,0)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, HUD_W, 160);
-    }
-    text('SENA', 28, 43, 'bold 37px Arial, sans-serif', '#ffffff');
-    text('QUEST', 137, 43, 'bold 37px Arial, sans-serif', '#ff981a');
-    text('Desafio dos Cursos VR', 29, 86, '19px Arial, sans-serif', '#d8e6f1');
-
-    // Botão do HUD: grupo ícone + texto centralizado como uma única unidade.
-    // O Canvas usa a mesma geometria para repouso/hover; nenhum estado muda a tipografia.
-    const bx = 1795,
-      by = 16,
-      bw = 224,
-      bh = 66;
-    rounded(bx, by + 3, bw, bh, 18);
-    ctx.fillStyle = '#082b4a';
+    // Keep Biluteteia's exact scoreboard coordinates and styling.
+    const x = 1505,
+      y = 676,
+      w = 514,
+      h = 445;
+    rounded(x, y, w, h, 22);
+    ctx.fillStyle = '#ff981a';
     ctx.fill();
-    rounded(bx, by, bw, bh, 18);
-    ctx.fillStyle = '#2d6d9f';
+    rounded(x + 2.5, y + 2.5, w - 5, h - 5, 19);
+    ctx.fillStyle = '#103f69';
     ctx.fill();
-    rounded(bx + 2, by + 2, bw - 4, bh - 4, 16);
-    ctx.fillStyle = '#003b6a';
-    ctx.fill();
-    const label = 'Configurações';
-    ctx.font = 'bold 22px Arial, sans-serif';
-    const metrics = ctx.measureText(label);
-    const iconSize = 27,
-      gap = 10;
-    const totalWidth = iconSize + gap + metrics.width;
-    const groupLeft = bx + (bw - totalWidth) / 2;
-    const cy = by + bh / 2;
-    const cx = groupLeft + iconSize / 2;
-    ctx.save();
-    ctx.translate(cx, cy);
-    ctx.strokeStyle = '#fff';
-    ctx.fillStyle = '#fff';
-    ctx.lineWidth = 2.7;
-    for (let i = 0; i < 8; i++) {
-      ctx.save();
-      ctx.rotate((i * Math.PI) / 4);
-      ctx.fillRect(-2, -14, 4, 6);
-      ctx.restore();
-    }
-    ctx.beginPath();
-    ctx.arc(0, 0, 9, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(0, 0, 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-    // Center glyphs using the same vertical middle as the gear, with a tiny optical correction.
-    ctx.font = 'bold 22px Arial, sans-serif';
-    ctx.fillStyle = '#fff';
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    const ascent = metrics.actualBoundingBoxAscent || 16;
-    const descent = metrics.actualBoundingBoxDescent || 5;
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText(label, groupLeft + iconSize + gap, cy + (ascent - descent) / 2 + 9);
-
-    if (showScore) {
-      // Right/bottom inset mirrors desktop's 12px margin; larger VR-safe text.
-      const x = 1505,
-        y = 676,
-        w = 514,
-        h = 445;
-      rounded(x, y, w, h, 22);
-      ctx.fillStyle = '#ff981a';
-      ctx.fill();
-      rounded(x + 2.5, y + 2.5, w - 5, h - 5, 19);
-      ctx.fillStyle = '#103f69';
-      ctx.fill();
-      text('CURSO', x + 25, y + 35, 'bold 17px Arial, sans-serif', '#ffb05a');
-      wrap(course, w - 52, 'bold 20px Arial, sans-serif').forEach((line, i) =>
-        text(line, x + 25, y + 65 + i * 24, 'bold 20px Arial, sans-serif', '#ffffff'),
+    text('CURSO', x + 25, y + 35, 'bold 17px Poppins, sans-serif', '#ffb05a');
+    wrap(course, w - 52, 'bold 20px Poppins, sans-serif').forEach((line, i) =>
+      text(line, x + 25, y + 65 + i * 24, 'bold 20px Poppins, sans-serif', '#ffffff'),
+    );
+    text('PLACAR · CLASSIFICAÇÃO', x + 25, y + 115, 'bold 17px Poppins, sans-serif', '#ffb05a');
+    text(
+      'Mais pontos primeiro; desempate pela casa.',
+      x + 25,
+      y + 145,
+      '16px Poppins, sans-serif',
+      '#c8dfef',
+    );
+    const columns = [x + 28, x + 97, x + 286, x + 371, x + 449];
+    ['POS.', 'JOGADOR', 'ORDEM', 'PTS', 'CASA'].forEach((v, i) =>
+      text(v, columns[i], y + 195, 'bold 14px Poppins, sans-serif', '#b4d0e4'),
+    );
+    // Render in visual order to preserve the active outline during crossing.
+    ranking.forEach((id, i) => {
+      const py = y + 232.5 + (positions.current[id] ?? i) * 44;
+      if (id === active) {
+        rounded(x + 13, py - 20, w - 26, 40, 9);
+        ctx.fillStyle = '#174e79';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#ff981a';
+        ctx.stroke();
+      }
+      const sequence = order.indexOf(id);
+      const values = [
+        `${i + 1}º`,
+        NAMES[id],
+        sequence < 0 ? '—' : `${sequence + 1}º`,
+        String(players[id].correct * 100),
+        `${players[id].position}/30`,
+      ];
+      values.forEach((value, j) =>
+        text(
+          value,
+          columns[j],
+          py,
+          `${j === 1 || j === 3 ? 'bold ' : ''}17px Poppins, sans-serif`,
+          j === 3 ? '#ffb05a' : '#ffffff',
+        ),
       );
-      text('PLACAR · CLASSIFICAÇÃO', x + 25, y + 115, 'bold 17px Arial, sans-serif', '#ffb05a');
-      text(
-        'Mais pontos primeiro; desempate pela casa.',
-        x + 25,
-        y + 145,
-        '16px Arial, sans-serif',
-        '#c8dfef',
-      );
-      const columns = [x + 28, x + 97, x + 286, x + 371, x + 449];
-      ['POS.', 'JOGADOR', 'ORDEM', 'PTS', 'CASA'].forEach((v, i) =>
-        text(v, columns[i], y + 195, 'bold 14px Arial, sans-serif', '#b4d0e4'),
-      );
-      ranking.forEach((id, i) => {
-        const py = y + 232.5 + i * 44;
-        if (id === active) {
-          rounded(x + 13, py - 20, w - 26, 40, 9);
-          ctx.fillStyle = '#174e79';
-          ctx.fill();
-          ctx.lineWidth = 3;
-          ctx.strokeStyle = '#ff981a';
-          ctx.stroke();
-        }
-        const sequence = order.indexOf(id);
-        const values = [
-          `${i + 1}º`,
-          NAMES[id],
-          sequence < 0 ? '—' : `${sequence + 1}º`,
-          String(players[id].correct * 100),
-          `${players[id].position}/30`,
-        ];
-        values.forEach((value, j) =>
-          text(
-            value,
-            columns[j],
-            py,
-            `${j === 1 || j === 3 ? 'bold ' : ''}17px Arial, sans-serif`,
-            j === 3 ? '#ffb05a' : '#ffffff',
-          ),
-        );
-      });
-      text(
-        'Ordem = sequência sorteada de jogadas',
-        x + 25,
-        y + 412.5,
-        '15px Arial, sans-serif',
-        '#c8dfef',
-      );
-    }
-    const t = new THREE.CanvasTexture(canvas);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 4;
-    return t;
-  }, [
-    ranking.join(','),
-    players.map((p) => `${p.correct}:${p.position}`).join(','),
-    course,
-    gradient,
-    showScore,
-    active,
-    order.join(','),
-  ]);
-  useEffect(() => () => texture?.dispose(), [texture]);
-  if (!texture) return null;
+    });
+    text(
+      'Ordem = sequência sorteada de jogadas',
+      x + 25,
+      y + 412.5,
+      '15px Poppins, sans-serif',
+      '#c8dfef',
+    );
+    surface.texture.needsUpdate = true;
+  });
   return (
     <mesh renderOrder={2000} raycast={() => null}>
       <planeGeometry args={[HUD_PLANE_W, HUD_PLANE_H]} />
       <meshBasicMaterial
-        map={texture}
+        map={surface.texture}
         transparent
         depthTest={false}
         depthWrite={false}
@@ -247,201 +208,93 @@ function VisorHUD({
 }) {
   const root = useRef<THREE.Group>(null);
   const { gl } = useThree();
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [showScore, setShowScore] = useState(true);
-  const [showGradient, setShowGradient] = useState(true);
   const p = useRef(new THREE.Vector3());
   const q = useRef(new THREE.Quaternion());
   const rotatedOffset = useRef(new THREE.Vector3());
-  useFrame(() => {
+  const smoothedOrientation = useRef(new THREE.Quaternion());
+  const relative = useRef(new THREE.Quaternion());
+  const relativeEuler = useRef(new THREE.Euler());
+  const limited = useRef(new THREE.Quaternion());
+  const initialized = useRef(false);
+  const adaptiveScale = useRef(1);
+  const lastProjection = useRef(0);
+  const hudInset = useRef(new THREE.Vector2(0, 0));
+  const localInset = useRef(new THREE.Vector3());
+  useFrame((_, delta) => {
     if (!root.current || !gl.xr.isPresenting) return;
     const headset = gl.xr.getCamera();
     headset.updateWorldMatrix(true, false);
+    // Use the narrower eye's horizontal/vertical FOV to keep the scoreboard
+    // inside a conservative readable area across different headsets.
+    if (lastProjection.current++ % 45 === 0) {
+      const eyes = headset.cameras.length ? headset.cameras : [headset];
+      const bounds = eyes
+        .map((eye) => {
+          const e = eye.projectionMatrix.elements;
+          return [2 * Math.atan(1 / Math.abs(e[0])), 2 * Math.atan(1 / Math.abs(e[5]))];
+        })
+        .filter(
+          ([horizontal, vertical]) => Number.isFinite(horizontal) && Number.isFinite(vertical),
+        );
+      if (bounds.length) {
+        const horizontal = Math.min(...bounds.map((b) => b[0]));
+        const vertical = Math.min(...bounds.map((b) => b[1]));
+        // The score panel occupies only the lower-right region of the artwork.
+        // Align that region, not the empty canvas, with the safe visible margins.
+        const safeRight = HUD_DISTANCE * Math.tan(horizontal / 2) * 0.88;
+        const safeBottom = -HUD_DISTANCE * Math.tan(vertical / 2) * 0.85;
+        const rightEdge = (2019 / HUD_W - 0.5) * HUD_PLANE_W;
+        const bottomEdge = (0.5 - 1121 / HUD_H) * HUD_PLANE_H;
+        const fit = Math.min(1, safeRight / rightEdge, safeBottom / bottomEdge);
+        adaptiveScale.current = THREE.MathUtils.clamp(fit, 0.58, 1);
+        hudInset.current.set(
+          safeRight - rightEdge * adaptiveScale.current,
+          safeBottom - bottomEdge * adaptiveScale.current,
+        );
+      }
+    }
+    root.current.scale.setScalar(
+      THREE.MathUtils.damp(root.current.scale.x, adaptiveScale.current, 5, Math.min(delta, 0.05)),
+    );
     headset.getWorldPosition(p.current);
     headset.getWorldQuaternion(q.current);
     rotatedOffset.current.set(0, 0, -HUD_DISTANCE).applyQuaternion(q.current);
     root.current.position.copy(p.current).add(rotatedOffset.current);
-    root.current.quaternion.copy(q.current);
+    localInset.current.set(hudInset.current.x, hudInset.current.y, 0).applyQuaternion(q.current);
+    root.current.position.add(localInset.current);
+    if (!initialized.current) {
+      smoothedOrientation.current.copy(q.current);
+      initialized.current = true;
+    }
+    smoothedOrientation.current.slerp(
+      q.current,
+      1 - Math.exp(-SCORE_PARALLAX_SMOOTHING * Math.min(delta, 0.05)),
+    );
+    relative.current.copy(q.current).invert().multiply(smoothedOrientation.current);
+    relativeEuler.current.setFromQuaternion(relative.current, 'YXZ');
+    relativeEuler.current.x = THREE.MathUtils.clamp(
+      -relativeEuler.current.x,
+      -SCORE_MAX_TILT_RAD,
+      SCORE_MAX_TILT_RAD,
+    );
+    relativeEuler.current.y = THREE.MathUtils.clamp(
+      -relativeEuler.current.y,
+      -SCORE_MAX_TILT_RAD,
+      SCORE_MAX_TILT_RAD,
+    );
+    relativeEuler.current.z = 0;
+    limited.current.setFromEuler(relativeEuler.current);
+    root.current.quaternion.copy(q.current).multiply(limited.current);
   });
-  // The hit target exactly matches the settings artwork coordinates in canvas pixels.
-  const settingsX = ((1795 + 224 / 2) / HUD_W - 0.5) * HUD_PLANE_W;
-  const settingsY = (0.5 - (16 + 66 / 2) / HUD_H) * HUD_PLANE_H;
   return (
     <group ref={root}>
       <HudArtwork
         ranking={ranking}
         players={players}
         course={course}
-        gradient={showGradient}
-        showScore={showScore}
         active={active}
         order={order}
       />
-      <mesh
-        position={[settingsX, settingsY, 0.012]}
-        renderOrder={2002}
-        onPointerOver={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          setSettingsOpen((v) => !v);
-        }}
-      >
-        <planeGeometry args={[(224 / HUD_W) * HUD_PLANE_W, (66 / HUD_H) * HUD_PLANE_H]} />
-        <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
-      </mesh>
-      {settingsOpen && (
-        <group position={[0.76, 0.37, 0.12]} renderOrder={2100}>
-          <Panel width={0.83} height={0.36} />
-          <VRLabel y={0.115} size={0.039} width={0.75}>
-            Configurações VR
-          </VRLabel>
-          <VRButton
-            label={showScore ? 'Ocultar placar' : 'Mostrar placar'}
-            y={0.025}
-            width={0.7}
-            height={0.073}
-            size={0.031}
-            onClick={() => setShowScore((v) => !v)}
-          />
-          <VRButton
-            label={showGradient ? 'Ocultar degradê' : 'Mostrar degradê'}
-            y={-0.063}
-            width={0.7}
-            height={0.073}
-            size={0.031}
-            onClick={() => setShowGradient((v) => !v)}
-          />
-          <VRButton
-            label="Fechar"
-            y={-0.143}
-            width={0.7}
-            height={0.063}
-            size={0.029}
-            onClick={() => setSettingsOpen(false)}
-          />
-        </group>
-      )}
-    </group>
-  );
-}
-
-function Panel({ width, height }: { width: number; height: number }) {
-  return (
-    <group renderOrder={2001}>
-      <RoundedBox args={[width, height, 0.026]} radius={0.028} smoothness={3}>
-        <meshBasicMaterial
-          color={ORANGE}
-          transparent
-          opacity={0.99}
-          depthTest={false}
-          depthWrite={false}
-        />
-      </RoundedBox>
-      <RoundedBox
-        args={[width - 0.014, height - 0.014, 0.027]}
-        radius={0.024}
-        smoothness={3}
-        position={[0, 0, 0.017]}
-      >
-        <meshBasicMaterial color={NAVY} depthTest={false} depthWrite={false} />
-      </RoundedBox>
-    </group>
-  );
-}
-
-function VRLabel({
-  children,
-  y,
-  x = 0,
-  size = 0.048,
-  width = 1.05,
-  color = '#ffffff',
-}: {
-  children: string;
-  y: number;
-  x?: number;
-  size?: number;
-  width?: number;
-  color?: string;
-}) {
-  return (
-    <Text
-      position={[x, y, 0.11]}
-      renderOrder={2102}
-      material-depthTest={false}
-      material-depthWrite={false}
-      fontSize={size}
-      maxWidth={width}
-      lineHeight={1.12}
-      textAlign="center"
-      anchorX="center"
-      anchorY="middle"
-      color={color}
-      raycast={() => null}
-    >
-      {children}
-    </Text>
-  );
-}
-function VRButton({
-  label,
-  onClick,
-  y,
-  x = 0,
-  width = 1.1,
-  height = 0.115,
-  size = 0.042,
-  color = '#2277b9',
-}: {
-  label: string;
-  onClick: () => void;
-  y: number;
-  x?: number;
-  width?: number;
-  height?: number;
-  size?: number;
-  color?: string;
-}) {
-  const [hovered, setHovered] = useState(false);
-  return (
-    <group position={[x, y, 0.055]}>
-      <RoundedBox
-        args={[width, height, 0.025]}
-        radius={0.018}
-        smoothness={3}
-        renderOrder={2101}
-        onPointerOver={(e) => {
-          e.stopPropagation();
-          setHovered(true);
-        }}
-        onPointerOut={() => setHovered(false)}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}
-      >
-        <meshBasicMaterial
-          color={hovered ? '#358aca' : color}
-          depthTest={false}
-          depthWrite={false}
-        />
-      </RoundedBox>
-      <Text
-        position={[0, 0, 0.09]}
-        renderOrder={2103}
-        material-depthTest={false}
-        material-depthWrite={false}
-        fontSize={size}
-        maxWidth={width - 0.045}
-        lineHeight={1.05}
-        anchorX="center"
-        anchorY="middle"
-        textAlign="center"
-        color="#ffffff"
-        raycast={() => null}
-      >
-        {label}
-      </Text>
     </group>
   );
 }
@@ -456,66 +309,41 @@ function TableEdgeTablet({
   yaw,
   children,
   decorative = false,
+  showClamp = true,
 }: {
   position: [number, number, number];
   yaw: number;
   children?: ReactNode;
   decorative?: boolean;
+  showClamp?: boolean;
 }) {
   return (
-    <group position={position} rotation={[0, yaw, 0]}>
-      {/* Small rounded C-clamp: the upper and lower jaws grip the table edge. */}
-      <RoundedBox
-        args={[0.2, 0.03, 0.25]}
-        radius={0.012}
-        smoothness={3}
-        position={[0, -0.1, -0.115]}
-      >
-        <meshStandardMaterial color="#314b60" metalness={0.32} roughness={0.53} />
-      </RoundedBox>
-      <RoundedBox
-        args={[0.2, 0.03, 0.25]}
-        radius={0.012}
-        smoothness={3}
-        position={[0, -0.34, -0.115]}
-      >
-        <meshStandardMaterial color="#314b60" metalness={0.32} roughness={0.53} />
-      </RoundedBox>
-      <RoundedBox
-        args={[0.19, 0.26, 0.032]}
-        radius={0.013}
-        smoothness={3}
-        position={[0, -0.22, -0.225]}
-      >
-        <meshStandardMaterial color="#314b60" metalness={0.32} roughness={0.53} />
-      </RoundedBox>
-      {/* Short stem and pivot sit behind the screen, never over the artwork. */}
-      <RoundedBox
-        args={[0.09, 0.115, 0.048]}
-        radius={0.018}
-        smoothness={3}
-        position={[0, -0.08, -0.08]}
-      >
-        <meshStandardMaterial color="#405a6e" metalness={0.28} roughness={0.52} />
-      </RoundedBox>
-      <mesh position={[0, -0.015, -0.065]} rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.032, 0.032, 0.12, 20]} />
-        <meshStandardMaterial color="#667e8c" metalness={0.46} roughness={0.42} />
-      </mesh>
-      {/* Tablet local +Y is screen up; its top tilts towards the board. */}
-      <group rotation={[-0.8, 0, 0]} position={[0, 0.06, 0]}>
-        <RoundedBox args={[1.27, 0.79, 0.048]} radius={0.034} smoothness={3}>
-          <meshStandardMaterial color="#142f48" roughness={0.58} />
-        </RoundedBox>
-        <RoundedBox
-          args={[1.215, 0.735, 0.008]}
-          radius={0.02}
-          smoothness={3}
-          position={[0, 0, 0.034]}
-        >
-          <meshBasicMaterial color={decorative ? '#082b49' : NAVY} />
-        </RoundedBox>
-        {children}
+    <group
+      name={decorative ? undefined : 'zoom-blocker-tablet'}
+      position={position}
+      rotation={[0, yaw, 0]}
+    >
+      <group position={[0, 0, decorative ? BOT_TABLET_EDGE_OFFSET : 0]}>
+        {showClamp && (
+          <>
+            {/* Small rounded C-clamp: the upper and lower jaws grip the table edge. */}
+
+            {/* Short stem and pivot sit behind the screen, never over the artwork. */}
+
+            <mesh position={[0, -0.015, -0.00085]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.032, 0.032, 0.12, 20]} />
+              <meshStandardMaterial color="#667e8c" metalness={0.46} roughness={0.42} />
+            </mesh>
+          </>
+        )}
+        {/* Tablet local +Y is screen up; its top tilts towards the board. */}
+        <group rotation={[-0.8, 0, 0]} position={[0, 0.06, 0]}>
+          <RoundedBox args={[1.27, 0.79, 0.048]} radius={0.034} smoothness={3}>
+            <meshStandardMaterial color="#142f48" roughness={0.58} />
+          </RoundedBox>
+
+          {children}
+        </group>
       </group>
     </group>
   );
@@ -523,8 +351,9 @@ function TableEdgeTablet({
 
 function BotScreen({ name }: { name: string }) {
   return (
-    <group position={[0, 0, -0.049]} rotation={[0, Math.PI, 0]}>
+    <group position={[0, 0, -0.025]} rotation={[0, Math.PI, 0]}>
       <Text
+        font={POPPINS_3D}
         position={[0, 0.235, 0]}
         fontSize={0.063}
         anchorX="center"
@@ -535,6 +364,7 @@ function BotScreen({ name }: { name: string }) {
         {name}
       </Text>
       <Text
+        font={POPPINS_3D}
         position={[0, 0.142, 0]}
         fontSize={0.058}
         anchorX="center"
@@ -545,6 +375,7 @@ function BotScreen({ name }: { name: string }) {
         SENAQUEST
       </Text>
       <Text
+        font={POPPINS_3D}
         position={[0, 0.072, 0]}
         fontSize={0.028}
         anchorX="center"
@@ -581,8 +412,8 @@ export function VRInterface() {
     <>
       {/* The front table edge is at z~2; place the screen outside the board, centered on each seat. */}
       {/* Smaller edge-mounted display: preserve board sightline and clear the chair volume. */}
-      <group scale={0.87} position={[0, 0.205, 0.6]}>
-        <TableEdgeTablet position={[0, 1.075, 2.55]} yaw={0}>
+      <group scale={0.87} position={[0, 0.3, 0.38]}>
+        <TableEdgeTablet position={[0, 1.075, 2.55]} yaw={0} showClamp={false}>
           <VRTabletScreen />
         </TableEdgeTablet>
       </group>

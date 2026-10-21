@@ -1,3 +1,4 @@
+import { POPPINS_3D } from './poppins';
 import { Text, RoundedBox } from '@react-three/drei';
 import { useGame, currentArea, currentPlayer, currentQuestion } from '../game/store';
 import { COURSES, NAMES } from '../game/data';
@@ -33,7 +34,13 @@ function Button3D({
           emissiveIntensity={0.12}
         />
       </RoundedBox>
-      <Text position={[0, 0, 0.06]} fontSize={0.17} maxWidth={2.7} color="#ffffff">
+      <Text
+        font={POPPINS_3D}
+        position={[0, 0, 0.06]}
+        fontSize={0.17}
+        maxWidth={2.7}
+        color="#ffffff"
+      >
         {label}
       </Text>
     </group>
@@ -103,10 +110,17 @@ export function ScenePanel() {
       <RoundedBox args={[4.15, 3.15, 0.12]} radius={0.15}>
         <meshStandardMaterial color="#142c49" transparent opacity={0.97} />
       </RoundedBox>
-      <Text position={[0, 1.23, 0.09]} maxWidth={3.8} fontSize={0.25} color="#7de4d9">
+      <Text
+        font={POPPINS_3D}
+        position={[0, 1.23, 0.09]}
+        maxWidth={3.8}
+        fontSize={0.25}
+        color="#7de4d9"
+      >
         {title}
       </Text>
       <Text
+        font={POPPINS_3D}
         position={[0, 0.73, 0.09]}
         maxWidth={3.75}
         fontSize={0.155}
@@ -125,7 +139,7 @@ export function ScenePanel() {
           onClick={b.action}
         />
       ))}
-      <Text position={[0, -1.45, 0.09]} fontSize={0.1} color="#a8c1d8">
+      <Text font={POPPINS_3D} position={[0, -1.45, 0.09]} fontSize={0.1} color="#a8c1d8">
         {COURSES[s.course].name} •{' '}
         {NAMES.map((n, i) => `${n}: ${s.players[i].position}`).join('  ')}
       </Text>

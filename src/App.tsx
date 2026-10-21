@@ -5,6 +5,8 @@ import { useGame, currentArea, currentPlayer, currentQuestion } from './game/sto
 import { COLORS, COURSES, COURSE_IDS, NAMES } from './game/data';
 import './style.css';
 import { playSound, setSoundVolume } from './game/sounds';
+import { setQuizMusicActive, unlockQuizMusic, disposeQuizMusic } from './game/quizMusic';
+import { setMenuMusicActive, unlockMenuMusic, disposeMenuMusic } from './game/menuMusic';
 import { useDiceTuning } from './scene/diceTuning';
 
 type AutoPhase =
@@ -200,6 +202,51 @@ function App() {
   const setShowColliders = useDiceTuning((s) => s.setShowColliders);
   const player = currentPlayer(game);
   const [remaining, setRemaining] = useState<number | null>(null);
+  const [victoryRemaining, setVictoryRemaining] = useState(60);
+  const [victoryDeadline, setVictoryDeadline] = useState<number | null>(null);
+  // A vitória dura no máximo 60 s; o botão existente 'Trocar curso' continua funcionando.
+  useEffect(() => {
+    if (game.phase !== 'finished') {
+      setVictoryRemaining(60);
+      setVictoryDeadline(null);
+      return;
+    }
+    const deadline = performance.now() + 60000;
+    setVictoryDeadline(deadline);
+    const interval = window.setInterval(() => {
+      setVictoryRemaining(Math.max(0, Math.ceil((deadline - performance.now()) / 1000)));
+    }, 250);
+    const timeout = window.setTimeout(() => {
+      if (useGame.getState().phase === 'finished') useGame.getState().restart(true);
+    }, 60000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
+  }, [game.phase]);
+
+  // Apenas a faixa do questionário foi adicionada nesta etapa.
+  useEffect(() => {
+    setQuizMusicActive(game.phase === 'question');
+  }, [game.phase]);
+  // Música do menu: seleção e confirmação de curso; sem fade.
+  useEffect(() => {
+    setMenuMusicActive(game.phase === 'choose' || game.phase === 'confirm');
+  }, [game.phase]);
+  useEffect(() => {
+    const unlock = () => {
+      unlockQuizMusic();
+      unlockMenuMusic();
+    };
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('keydown', unlock);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', unlock);
+      disposeQuizMusic();
+      disposeMenuMusic();
+    };
+  }, []);
   const [questionRemaining, setQuestionRemaining] = useState(20);
   const [rollRemaining, setRollRemaining] = useState(15);
   const [timerDeadline, setTimerDeadline] = useState<{
@@ -377,31 +424,35 @@ function App() {
   }, [game.phase, game.turnIndex, game.activeQuestion?.id, player]);
 
   const time =
-    remaining !== null
-      ? remaining
-      : game.phase === 'question'
-        ? questionRemaining
-        : game.phase === 'turn'
-          ? rollRemaining
-          : null;
+    game.phase === 'finished'
+      ? victoryRemaining
+      : remaining !== null
+        ? remaining
+        : game.phase === 'question'
+          ? questionRemaining
+          : game.phase === 'turn'
+            ? rollRemaining
+            : null;
   // Apenas a contagem numérica atualiza o React. A barra é animada pelo
   // compositor CSS, sem setState por quadro nem rerenderização da cena 3D.
   const timerDuration =
-    game.phase === 'lottery'
-      ? game.eligible[game.lotteryIndex] === 0
-        ? 10
-        : 1.2
-      : game.phase === 'question'
-        ? 20
-        : game.phase === 'turn'
-          ? player === 0
-            ? 15
-            : 2.8
-          : game.phase === 'moving'
-            ? Math.max(4, Math.abs(game.movementTo - game.movementFrom) * 0.3 + 1.1)
-            : game.phase in AUTO_TIMES
-              ? AUTO_TIMES[game.phase as AutoPhase]
-              : 0;
+    game.phase === 'finished'
+      ? 60
+      : game.phase === 'lottery'
+        ? game.eligible[game.lotteryIndex] === 0
+          ? 10
+          : 1.2
+        : game.phase === 'question'
+          ? 20
+          : game.phase === 'turn'
+            ? player === 0
+              ? 15
+              : 2.8
+            : game.phase === 'moving'
+              ? Math.max(4, Math.abs(game.movementTo - game.movementFrom) * 0.3 + 1.1)
+              : game.phase in AUTO_TIMES
+                ? AUTO_TIMES[game.phase as AutoPhase]
+                : 0;
   const timerKey = `${game.phase}-${game.turnIndex}-${game.lotteryIndex}-${game.lotteryNonce}-${game.throwNonce}-${game.activeQuestion?.id ?? ''}`;
   // The VR tablet reads the exact same clock as the desktop HUD.
   useEffect(() => {
@@ -411,11 +462,12 @@ function App() {
           phase: game.phase,
           seconds: time,
           duration: timerDuration,
-          deadline: timerDeadline?.deadline,
+          deadline:
+            game.phase === 'finished' ? (victoryDeadline ?? undefined) : timerDeadline?.deadline,
         },
       }),
     );
-  }, [game.phase, time, timerDuration, timerDeadline?.deadline]);
+  }, [game.phase, time, timerDuration, timerDeadline?.deadline, victoryDeadline]);
   const showPanel = !['choose', 'confirm'].includes(game.phase);
 
   return (
@@ -822,6 +874,20 @@ function App() {
             <h1>🏆 Classificação final</h1>
             <h2>👑 {NAMES[game.winner ?? 0]} 👑</h2>
             <p>{game.finishReason} · 🎉 Parabéns!</p>
+            <p>Retorno ao menu em {victoryRemaining}s</p>
+            <div
+              className="victory-progress"
+              role="progressbar"
+              aria-label="Tempo restante para voltar ao menu"
+              aria-valuemin={0}
+              aria-valuemax={60}
+              aria-valuenow={victoryRemaining}
+            >
+              <div
+                className="victory-progress-fill"
+                style={{ width: `${(victoryRemaining / 60) * 100}%` }}
+              />
+            </div>
             {[0, 1, 2, 3]
               .sort(
                 (a, b) =>

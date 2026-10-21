@@ -1,18 +1,20 @@
+import { POPPINS_3D } from './poppins';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
-import { CharacterName } from './CharacterName';
 import { XR, XROrigin, createXRStore } from '@react-three/xr';
 import { VRInterface } from './VRInterface';
 import * as THREE from 'three';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { useMemo } from 'react';
 import { COLORS, NAMES, colorIndex } from '../game/data';
 import { PLAYER_COLORS } from '../game/playerVisual';
 import { useGame } from '../game/store';
 import { DicePhysics } from './Dice';
 import { FBXChico } from './characters/Chico';
 import { FBXPaty } from './characters/Paty';
-import { VictoryEffects, Crown, CROWN_TOP_OFFSET } from './VictoryEffects';
-import { championEnvelope } from './characterAnimation';
+import { FBXClaudinha } from './characters/Claudinha';
+import { VictoryEffects } from './VictoryEffects';
 import {
   pawnOffset,
   boardGridPosition,
@@ -112,6 +114,7 @@ function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => voi
         <primitive object={NUMBER_BADGE_MATERIAL} attach="material" />
       </mesh>
       <Text
+        font={POPPINS_3D}
         onSync={() => onTextReady(`number-${n}`)}
         renderOrder={31}
         material-depthWrite={false}
@@ -131,6 +134,7 @@ function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => voi
       </Text>
       {isEvent && (
         <Text
+          font={POPPINS_3D}
           onSync={() => onTextReady(`event-${n}`)}
           position={[-0.355, 0.086, -0.355]}
           rotation={[-Math.PI / 2, 0, 0]}
@@ -144,6 +148,7 @@ function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => voi
       )}
       {(n === 1 || n === 30) && (
         <Text
+          font={POPPINS_3D}
           onSync={() => onTextReady(`endpoint-${n}`)}
           position={[0, 0.086, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
@@ -508,7 +513,7 @@ function StaticContactShadow({
 }
 function Desk() {
   return (
-    <group>
+    <group name="zoom-blocker-table">
       <StaticContactShadow position={[0, 0.005, 0]} size={[5.7, 5.7]} opacity={0.19} />
       {/* Tampão sólido, friso discreto e estrutura interna sem pernas suspensas. */}
       <RoundedBox
@@ -551,11 +556,90 @@ function Desk() {
     </group>
   );
 }
-const themes = [
-  { skin: '#e3ae8e', hair: '#392d34', pants: '#343e60' },
-  { skin: '#b97658', hair: '#211b24', pants: '#353b4d' },
-  { skin: '#b98a6a', hair: '#30211a', pants: '#2a3242' },
-];
+// Cadeira FBX compartilhada pelos quatro lugares; ajustes globais.
+const TEST_CHAIR = {
+  height: 1.9, // altura total da cadeira em metros no mundo virtual
+  offset: [0, 0, 0] as [number, number, number], // X, Y, Z locais
+  yaw: 0, // rotação adicional local em radianos
+};
+// Ajustes exclusivos da cadeira do jogador principal (+Z).
+const PLAYER_CHAIR = {
+  height: 1.9,
+  offset: [0, 0, -0.25] as [number, number, number],
+  yaw: 0,
+};
+function TestFBXChair({
+  position,
+  rotation = 0,
+  player = false,
+}: {
+  position: [number, number, number];
+  rotation?: number;
+  player?: boolean;
+}) {
+  const config = player ? PLAYER_CHAIR : TEST_CHAIR;
+  const source = useLoader(FBXLoader, '/models/main_chair.fbx');
+  const chairTexture = useLoader(THREE.TextureLoader, '/models/main_chair-color.webp');
+  chairTexture.colorSpace = THREE.SRGBColorSpace;
+  chairTexture.flipY = true;
+  const { model, scale, centerX, minY, centerZ } = useMemo(() => {
+    const model = source.clone(true);
+    const bounds = new THREE.Box3().setFromObject(model);
+    const size = bounds.getSize(new THREE.Vector3());
+    const center = bounds.getCenter(new THREE.Vector3());
+    model.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+        node.frustumCulled = true;
+        // Material independente por instância: preserva o FBX e permite ajustar o acabamento.
+        const materials = Array.isArray(node.material) ? node.material : [node.material];
+        const adjusted = materials.map((original) => {
+          const material = original.clone();
+          if (material instanceof THREE.MeshStandardMaterial) {
+            if (node.geometry.getAttribute('uv')) material.map = chairTexture;
+            material.color.set('#ffffff');
+            material.roughness = 1;
+            material.metalness = 0;
+            material.transparent = false;
+            material.opacity = 1;
+            material.needsUpdate = true;
+          } else if (material instanceof THREE.MeshPhongMaterial) {
+            if (node.geometry.getAttribute('uv')) material.map = chairTexture;
+            material.color.set('#ffffff');
+            material.specular.set('#000000');
+            material.shininess = 0;
+            material.transparent = false;
+            material.opacity = 1;
+            material.needsUpdate = true;
+          }
+          return material;
+        });
+        node.material = Array.isArray(node.material) ? adjusted : adjusted[0];
+      }
+    });
+    return {
+      model,
+      scale: config.height / Math.max(size.y, 0.001),
+      centerX: center.x,
+      minY: bounds.min.y,
+      centerZ: center.z,
+    };
+  }, [source, chairTexture, config.height]);
+  return (
+    <group
+      name={player ? 'zoom-blocker-chair' : undefined}
+      position={position}
+      rotation={[0, rotation, 0]}
+    >
+      <group position={config.offset} rotation={[0, config.yaw, 0]}>
+        <group scale={scale}>
+          <primitive object={model} position={[-centerX, -minY, -centerZ]} />
+        </group>
+      </group>
+    </group>
+  );
+}
 function Chair({
   position,
   rotation = 0,
@@ -588,178 +672,6 @@ function Chair({
   );
 }
 // Personagem sentado no eixo +Z. As articulações ficam em grupos separados para futura troca por GLB rigado.
-function SeatedTeacher({
-  index,
-  position,
-  rotation,
-}: {
-  index: number;
-  position: [number, number, number];
-  rotation: number;
-}) {
-  const left = useRef<THREE.Group>(null),
-    right = useRef<THREE.Group>(null),
-    head = useRef<THREE.Group>(null),
-    eyes = useRef<THREE.Group>(null);
-  const p = themes[index - 1];
-  const winner = useGame((st) => st.winner);
-  const debugReaction = useGame((st) => st.debugReaction);
-  const victoryNonce = useGame((st) => st.debugVictoryNonce);
-  const lastDebugNonce = useRef(0);
-  const phase = useGame((st) => st.phase),
-    active = useGame((st) => st.order[st.turnIndex]),
-    dice = useGame((st) => st.die),
-    outcome = useGame((st) => st.outcome);
-  const throwStart = useRef(-100),
-    lastPhase = useRef(phase),
-    shakeStart = useRef(-100),
-    prepareStart = useRef(-100),
-    lastPreparing = useRef(false),
-    championStart = useRef(-100),
-    wasChampion = useRef(false),
-    lastVictoryNonce = useRef(victoryNonce);
-  useFrame(({ clock }) => {
-    const t = clock.elapsedTime + index * 2;
-    if (debugReaction?.player === index && debugReaction.nonce !== lastDebugNonce.current) {
-      if (debugReaction.kind === 'wrong') shakeStart.current = clock.elapsedTime;
-      else throwStart.current = clock.elapsedTime;
-      lastDebugNonce.current = debugReaction.nonce;
-    }
-    const championNow = phase === 'finished' && winner === index;
-    if (championNow && (!wasChampion.current || lastVictoryNonce.current !== victoryNonce))
-      championStart.current = clock.elapsedTime;
-    lastVictoryNonce.current = victoryNonce;
-    wasChampion.current = championNow;
-    const champion = championNow ? championEnvelope(clock.elapsedTime - championStart.current) : 0;
-    const state = useGame.getState();
-    const preparing =
-      (phase === 'turn' && active === index) ||
-      (phase === 'lottery' && state.eligible[state.lotteryIndex] === index);
-    if (preparing && !lastPreparing.current) prepareStart.current = clock.elapsedTime;
-    lastPreparing.current = preparing;
-    const prepTime = clock.elapsedTime - prepareStart.current;
-    const prepShake = preparing
-      ? Math.sin(prepTime * 20) * 0.19 * THREE.MathUtils.smoothstep(prepTime, 0, 0.15)
-      : 0;
-    if (lastPhase.current !== phase) {
-      if (phase === 'rolling' && active === index) throwStart.current = clock.elapsedTime;
-      if (phase === 'feedback' && active === index && outcome !== 'correct')
-        shakeStart.current = clock.elapsedTime;
-      lastPhase.current = phase;
-    }
-    if (left.current) {
-      left.current.rotation.x = -0.32 + Math.sin(t * 1.3) * 0.13 - champion * 2.1;
-      left.current.rotation.z = -champion * 0.12;
-    }
-    if (right.current) {
-      const elapsed = clock.elapsedTime - throwStart.current;
-      const throwing = active === index && dice !== null && elapsed >= 0 && elapsed < 1.3;
-      const pulse = throwing ? Math.sin((elapsed / 1.3) * Math.PI) * 1.05 : 0;
-      right.current.rotation.x =
-        -0.32 + Math.sin(t * 1.1) * 0.16 - pulse + prepShake - champion * 2.1;
-      right.current.rotation.z = champion
-        ? champion * 0.12
-        : throwing
-          ? -0.22
-          : preparing
-            ? -0.11
-            : 0;
-    }
-    if (head.current) {
-      const sh = clock.elapsedTime - shakeStart.current;
-      const shake =
-        sh >= 0 && sh < 1.2 ? Math.sin(sh * 14) * Math.sin((Math.PI * sh) / 1.2) * 0.3 : 0;
-      head.current.rotation.y = Math.sin(t * 0.7) * 0.18 + Math.sin(t * 0.23) * 0.05 + shake;
-      head.current.rotation.z = Math.sin(t * 0.9) * 0.035;
-      head.current.rotation.x = Math.sin(t * 0.61) * 0.035 + Math.abs(shake) * 0.14;
-    }
-    if (eyes.current) eyes.current.scale.y = t % 4.5 < 0.14 ? 0.08 : 1;
-  });
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <Chair position={[0, 0, -0.1]} />
-      <mesh position={[0, 1.12, 0]} castShadow>
-        <capsuleGeometry args={[0.33, 0.46, 4, 12]} />
-        <meshStandardMaterial color="#142d51" />
-      </mesh>
-      <mesh position={[0, 1.08, 0.325]}>
-        <boxGeometry args={[0.33, 0.13, 0.025]} />
-        <meshStandardMaterial color="#f5f7ff" />
-      </mesh>
-      <Text position={[0, 1.08, 0.342]} fontSize={0.1} color="#173a67">
-        Senac
-      </Text>
-      <mesh position={[0, 0.79, 0.03]}>
-        <boxGeometry args={[0.59, 0.24, 0.49]} />
-        <meshStandardMaterial color={p.pants} />
-      </mesh>
-      {[-0.18, 0.18].map((x, i) => (
-        <group key={i}>
-          <mesh position={[x, 0.67, 0.34]} rotation={[Math.PI / 2, 0, 0]}>
-            <capsuleGeometry args={[0.14, 0.5, 4, 10]} />
-            <meshStandardMaterial color={p.pants} />
-          </mesh>
-          <mesh position={[x, 0.36, 0.67]}>
-            <capsuleGeometry args={[0.13, 0.42, 4, 10]} />
-            <meshStandardMaterial color={p.pants} />
-          </mesh>
-          <mesh position={[x, 0.13, 0.78]}>
-            <boxGeometry args={[0.27, 0.14, 0.44]} />
-            <meshStandardMaterial color="#283343" />
-          </mesh>
-        </group>
-      ))}
-      {[-1, 1].map((side) => (
-        <group key={side} ref={side === -1 ? left : right} position={[side * 0.37, 1.39, 0.02]}>
-          <mesh position={[side * 0.09, -0.23, 0.08]} rotation={[0.3, 0, side * 0.15]}>
-            <capsuleGeometry args={[0.1, 0.42, 4, 10]} />
-            <meshStandardMaterial color={p.skin} />
-          </mesh>
-          <mesh position={[side * 0.05, -0.06, 0]}>
-            <capsuleGeometry args={[0.14, 0.13, 4, 10]} />
-            <meshStandardMaterial color="#142d51" />
-          </mesh>
-          <mesh position={[side * 0.12, -0.48, 0.22]}>
-            <sphereGeometry args={[0.11, 10, 8]} />
-            <meshStandardMaterial color={p.skin} />
-          </mesh>
-        </group>
-      ))}
-      <group ref={head} position={[0, 1.77, 0]}>
-        <mesh castShadow>
-          <sphereGeometry args={[0.29, 18, 14]} />
-          <meshStandardMaterial color={p.skin} />
-        </mesh>
-        <mesh position={[0, 0.17, -0.08]} scale={[1, 0.62, 0.86]}>
-          <sphereGeometry args={[0.31, 14, 12]} />
-          <meshStandardMaterial color={p.hair} />
-        </mesh>
-        <group ref={eyes}>
-          {[-0.105, 0.105].map((x) => (
-            <mesh key={x} position={[x, 0.025, 0.273]}>
-              <sphereGeometry args={[0.027, 8, 8]} />
-              <meshStandardMaterial color="#172436" />
-            </mesh>
-          ))}
-        </group>
-        <mesh position={[0, -0.13, 0.275]} scale={[1, 0.2, 1]}>
-          <sphereGeometry args={[0.07, 10, 8]} />
-          <meshStandardMaterial color="#884c51" />
-        </mesh>
-      </group>
-      <CharacterName
-        name={NAMES[index]}
-        height={
-          phase === 'finished' && winner === index
-            ? 2.28 + CROWN_TOP_OFFSET * 0.92 + (2.3 - 2.13)
-            : 2.3
-        }
-        color={PAWN_COLORS[index]}
-      />
-      {phase === 'finished' && winner === index && <Crown position={[0, 2.28, 0]} scale={0.92} />}
-    </group>
-  );
-}
 function Shelf({
   position,
   rotation = 0,
@@ -819,6 +731,7 @@ function WallPanel({
         <meshStandardMaterial color={color} />
       </RoundedBox>
       <Text
+        font={POPPINS_3D}
         position={[0, 0.24, 0.075]}
         fontSize={0.27}
         maxWidth={4.0}
@@ -831,6 +744,7 @@ function WallPanel({
         {title === 'TECNOLOGIA DA INFORMAÇÃO' ? 'TECNOLOGIA DA\nINFORMAÇÃO' : title}
       </Text>
       <Text
+        font={POPPINS_3D}
         position={[0, -0.43, 0.075]}
         fontSize={0.15}
         maxWidth={4.1}
@@ -939,6 +853,52 @@ function WallDecor() {
     </>
   );
 }
+const DESKTOP_CAMERA_HEIGHT_BONUS = 0.2;
+const VR_CAMERA_HEIGHT_BONUS = 0.5;
+const VR_TARGET_INITIAL_EYE_HEIGHT = 1.8;
+const VR_MAX_CALIBRATION_ADJUSTMENT = 0.2;
+
+// Calibra apenas uma vez por sessão, mantendo os movimentos reais da cabeça.
+function CalibratedXROrigin() {
+  const { gl } = useThree();
+  const origin = useRef<THREE.Group>(null);
+  const frames = useRef(0);
+  const calibrated = useRef(false);
+  useEffect(() => {
+    const reset = () => {
+      frames.current = 0;
+      calibrated.current = false;
+      if (origin.current) origin.current.position.y = VR_CAMERA_HEIGHT_BONUS;
+    };
+    gl.xr.addEventListener('sessionstart', reset);
+    gl.xr.addEventListener('sessionend', reset);
+    return () => {
+      gl.xr.removeEventListener('sessionstart', reset);
+      gl.xr.removeEventListener('sessionend', reset);
+    };
+  }, [gl]);
+  useFrame(() => {
+    if (!gl.xr.isPresenting || calibrated.current || !origin.current) return;
+    if (++frames.current < 20) return;
+    const headset = gl.xr.getCamera();
+    headset.updateWorldMatrix(true, false);
+    const measuredHeight = headset.getWorldPosition(new THREE.Vector3()).y;
+    if (!Number.isFinite(measuredHeight) || measuredHeight < 0.3) return;
+    const adjustment = THREE.MathUtils.clamp(
+      VR_TARGET_INITIAL_EYE_HEIGHT - measuredHeight,
+      -VR_MAX_CALIBRATION_ADJUSTMENT,
+      VR_MAX_CALIBRATION_ADJUSTMENT,
+    );
+    origin.current.position.y = VR_CAMERA_HEIGHT_BONUS + adjustment;
+    calibrated.current = true;
+  });
+  return (
+    <group ref={origin} position={[0, VR_CAMERA_HEIGHT_BONUS, 0]}>
+      <VRPinchCameraRig />
+    </group>
+  );
+}
+
 function FixedSeatCamera() {
   const { camera, gl } = useThree();
   const yaw = useRef(0),
@@ -948,7 +908,7 @@ function FixedSeatCamera() {
   const targetZoom = useRef(65);
   const smoothZoom = useRef(65);
   useEffect(() => {
-    camera.position.set(0, 1.91, 3.32);
+    camera.position.set(0, 1.91 + DESKTOP_CAMERA_HEIGHT_BONUS, 3.32);
     const el = gl.domElement;
     const down = (e: PointerEvent) => {
       drag.current = true;
@@ -987,7 +947,7 @@ function FixedSeatCamera() {
   }, [camera, gl]);
   useFrame(({ gl }, delta) => {
     if (gl.xr.isPresenting) return;
-    camera.position.set(0, 1.91, 3.32);
+    camera.position.set(0, 1.91 + DESKTOP_CAMERA_HEIGHT_BONUS, 3.32);
     camera.rotation.order = 'YXZ';
     camera.rotation.set(pitch.current, yaw.current, 0);
     // Amortecimento exponencial independente de FPS; atualiza a projeção só quando necessário.
@@ -1065,15 +1025,187 @@ function Classroom() {
       <Desk />
       <DicePhysics />
       <VictoryEffects />
-      <Chair position={[0, 0, -3.18]} rotation={0} />
+      <TestFBXChair position={[0, 0, -3.18]} rotation={0} />
       <FBXPaty position={[0, 0, -3.18]} rotation={0} />
-      <SeatedTeacher index={1} position={[3.18, 0, 0]} rotation={-Math.PI / 2} />
-      <Chair position={[-3.18, 0, 0]} rotation={Math.PI / 2} />
+      <TestFBXChair position={[3.18, 0, 0]} rotation={-Math.PI / 2} />
+      <FBXClaudinha position={[3.18, 0, 0]} rotation={-Math.PI / 2} />
+      <TestFBXChair position={[-3.18, 0, 0]} rotation={Math.PI / 2} />
       <FBXChico position={[-3.18, 0, 0]} rotation={Math.PI / 2} />
-      <Chair position={[0, 0, 3.18]} rotation={Math.PI} />
+      <TestFBXChair position={[0, 0, 3.18]} rotation={Math.PI} player />
     </>
   );
 }
+// Zoom VR por deslocamento do rig, sem alterar a escala do mundo nem o FOV do headset.
+// O FOV do desktop (65 -> 36) determina a aproximação equivalente em um plano
+// de referência a 2,5 m; não existe equivalência perfeita para todas as profundidades.
+const VR_ZOOM_REFERENCE_DISTANCE = 2.5;
+const VR_ZOOM_FACTOR =
+  Math.tan(THREE.MathUtils.degToRad(65 / 2)) / Math.tan(THREE.MathUtils.degToRad(36 / 2));
+const VR_ZOOM_DISTANCE = VR_ZOOM_REFERENCE_DISTANCE * (1 - 1 / VR_ZOOM_FACTOR);
+const HAND_PINCH_START = 0.035;
+const HAND_PINCH_END = 0.05;
+
+function VRPinchCameraRig() {
+  const rig = useRef<THREE.Group>(null);
+  const { gl, scene } = useThree();
+  const amount = useRef(0);
+  const collisionBounds = useRef<THREE.Box3[]>([]);
+  const HEAD_RADIUS = 0.16;
+  const COLLISION_SKIN = 0.025;
+  const eye = useRef(new THREE.Vector3());
+  const originPoint = useRef(new THREE.Vector3());
+  const probe = useRef(new THREE.Vector3());
+  const refreshBlockers = () => {
+    scene.updateMatrixWorld(true);
+    const boxes: THREE.Box3[] = [];
+    scene.traverse((node) => {
+      if (!['zoom-blocker-chair', 'zoom-blocker-tablet', 'zoom-blocker-table'].includes(node.name))
+        return;
+      if (node.name === 'zoom-blocker-table') {
+        // Tampão e estrutura da mesa; não transformar o volume em um cubo sólido gigante.
+        node.traverse((child) => {
+          if (!(child instanceof THREE.Mesh) || !child.visible) return;
+          const box = new THREE.Box3().setFromObject(child);
+          if (!box.isEmpty()) boxes.push(box.expandByScalar(HEAD_RADIUS + COLLISION_SKIN));
+        });
+      } else {
+        const box = new THREE.Box3().setFromObject(node);
+        if (!box.isEmpty()) boxes.push(box.expandByScalar(HEAD_RADIUS + COLLISION_SKIN));
+      }
+    });
+    collisionBounds.current = boxes;
+  };
+  // Distância assinada à caixa expandida: negativa dentro, positiva fora.
+  // Isso permite sair de uma sobreposição inicial, mas impede aprofundá-la.
+  const clearance = (point: THREE.Vector3, box: THREE.Box3) => {
+    const dx = Math.max(box.min.x - point.x, 0, point.x - box.max.x);
+    const dy = Math.max(box.min.y - point.y, 0, point.y - box.max.y);
+    const dz = Math.max(box.min.z - point.z, 0, point.z - box.max.z);
+    if (dx || dy || dz) return Math.hypot(dx, dy, dz);
+    return -Math.min(
+      point.x - box.min.x,
+      box.max.x - point.x,
+      point.y - box.min.y,
+      box.max.y - point.y,
+      point.z - box.min.z,
+      box.max.z - point.z,
+    );
+  };
+  const pinching = useRef<[boolean, boolean]>([false, false]);
+  const wasBoth = useRef(false);
+  const direction = useRef(new THREE.Vector3(0, 0, -1));
+  const forward = useRef(new THREE.Vector3());
+
+  useEffect(() => {
+    const reset = () => {
+      amount.current = 0;
+      wasBoth.current = false;
+      pinching.current = [false, false];
+      rig.current?.position.set(0, 0, 0);
+      collisionBounds.current = [];
+    };
+    gl.xr.addEventListener('sessionstart', reset);
+    gl.xr.addEventListener('sessionend', reset);
+    return () => {
+      gl.xr.removeEventListener('sessionstart', reset);
+      gl.xr.removeEventListener('sessionend', reset);
+    };
+  }, [gl]);
+
+  useFrame((_, delta, frame) => {
+    const root = rig.current;
+    if (!root || !gl.xr.isPresenting) return;
+    let both = false;
+    if (frame) {
+      const session = gl.xr.getSession();
+      const space = gl.xr.getReferenceSpace();
+      if (session && space) {
+        // Handedness fixa: a ordem dos inputSources pode variar durante a sessão.
+        const hands = [...session.inputSources].filter((source) => !!source.hand);
+        const readPinch = (handedness: XRHandedness, i: number) => {
+          const source = hands.find((hand) => hand.handedness === handedness);
+          const thumb = source?.hand?.get('thumb-tip');
+          const index = source?.hand?.get('index-finger-tip');
+          const a = thumb && frame.getJointPose(thumb, space);
+          const b = index && frame.getJointPose(index, space);
+          if (!a || !b) {
+            pinching.current[i] = false;
+            return false;
+          }
+          const pa = a.transform.position;
+          const pb = b.transform.position;
+          const distance = Math.hypot(pa.x - pb.x, pa.y - pb.y, pa.z - pb.z);
+          const active = distance < (pinching.current[i] ? HAND_PINCH_END : HAND_PINCH_START);
+          pinching.current[i] = active;
+          return active;
+        };
+        const left = readPinch('left', 0);
+        const right = readPinch('right', 1);
+        both = left && right;
+      }
+    }
+    if (both && !wasBoth.current) {
+      // Captura a direção do olhar no início do gesto para evitar desvio
+      // ou aceleração lateral enquanto a pessoa movimenta a cabeça.
+      const headset = gl.xr.getCamera();
+      headset.getWorldDirection(forward.current);
+      direction.current.copy(forward.current).normalize();
+      refreshBlockers();
+    }
+    wasBoth.current = both;
+    const target = both ? VR_ZOOM_DISTANCE : 0;
+    const next = THREE.MathUtils.damp(
+      amount.current,
+      target,
+      both ? 3.2 : 5.5,
+      Math.min(delta, 0.05),
+    );
+    let allowed = next;
+    if (both && next > amount.current && collisionBounds.current.length) {
+      const headset = gl.xr.getCamera();
+      headset.updateWorldMatrix(true, false);
+      headset.getWorldPosition(eye.current);
+      // Coordenada da cabeça sem o deslocamento aplicado ao rig.
+      originPoint.current.copy(eye.current).sub(root.position);
+      const start = amount.current;
+      const end = next;
+      const steps = Math.max(1, Math.ceil((end - start) / 0.02));
+      const startClearances = collisionBounds.current.map((box) => {
+        probe.current.copy(originPoint.current).addScaledVector(direction.current, start);
+        return clearance(probe.current, box);
+      });
+      // Varredura volumétrica contínua por passos de até 2 cm, sem tunneling.
+      // Se a cabeça já começar dentro de uma caixa, só pode reduzir a penetração.
+      let last = start;
+      for (let i = 1; i <= steps; i++) {
+        const candidate = start + ((end - start) * i) / steps;
+        probe.current.copy(originPoint.current).addScaledVector(direction.current, candidate);
+        let blocked = false;
+        for (let j = 0; j < collisionBounds.current.length; j++) {
+          const c = clearance(probe.current, collisionBounds.current[j]);
+          const initial = startClearances[j];
+          if ((initial >= 0 && c < 0) || (initial < 0 && c < initial - 0.001)) {
+            blocked = true;
+            break;
+          }
+        }
+        if (blocked) break;
+        last = candidate;
+      }
+      allowed = last;
+    }
+    amount.current = both ? Math.min(allowed, target) : next;
+    if (!both && amount.current < 0.0005) amount.current = 0;
+    // Apenas translada o XR Origin. Cenário, física e UI não são escalados.
+    root.position.copy(direction.current).multiplyScalar(amount.current);
+  });
+  return (
+    <group ref={rig}>
+      <XROrigin position={[0, 0.28, 3.32]} />
+    </group>
+  );
+}
+
 export function World() {
   const mobileXR =
     typeof navigator !== 'undefined' && /OculusBrowser|Quest|Android/i.test(navigator.userAgent);
@@ -1083,11 +1215,11 @@ export function World() {
       <Canvas
         dpr={[1, quality]}
         shadows={false}
-        camera={{ position: [0, 1.91, 3.32], fov: 65 }}
+        camera={{ position: [0, 1.91 + DESKTOP_CAMERA_HEIGHT_BONUS, 3.32], fov: 65 }}
         gl={{ antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: false }}
       >
         <XR store={xrStore}>
-          <XROrigin position={[0, 0.28, 3.32]} />
+          <CalibratedXROrigin />
           <VRInterface />
           <Classroom />
           <Board />

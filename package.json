@@ -1,6 +1,6 @@
 {
   "name": "senaquest-webxr",
-  "version": "2.7.1",
+  "version": "2.8.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -20,7 +20,8 @@
     "react-dom": "^19.1.1",
     "three": "^0.180.0",
     "zustand": "^5.0.8",
-    "@react-three/rapier": "^2.1.0"
+    "@react-three/rapier": "^2.1.0",
+    "@fontsource/poppins": "4.5.10"
   },
   "devDependencies": {
     "@types/react": "^19.1.13",

@@ -1,4 +1,8 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
+@import '@fontsource/poppins/400.css';
+@import '@fontsource/poppins/500.css';
+@import '@fontsource/poppins/600.css';
+@import '@fontsource/poppins/700.css';
+@import '@fontsource/poppins/800.css';
 :root {
   font-family: 'Poppins', system-ui, sans-serif;
   color: #fff;
@@ -939,4 +943,20 @@ footer {
   color: white;
   border: 1px solid #83a7c8;
   border-radius: 7px;
+}
+
+/* Contagem regressiva da tela de vitória */
+.victory-progress {
+  width: 100%;
+  height: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(130, 160, 190, 0.28);
+  margin: 12px 0 22px;
+}
+.victory-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #ff981a;
+  transition: width 0.25s linear;
 }

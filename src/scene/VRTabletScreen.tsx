@@ -1,3 +1,4 @@
+import { loadPoppinsCanvas } from './poppins';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -42,7 +43,7 @@ function write(
   bold = false,
   align: CanvasTextAlign = 'left',
 ) {
-  ctx.font = `${bold ? '700' : '500'} ${size}px Arial, sans-serif`;
+  ctx.font = `${bold ? '700' : '500'} ${size}px Poppins, sans-serif`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.fillStyle = color;
@@ -60,7 +61,7 @@ function lines(
   align: CanvasTextAlign = 'left',
   maxLines = 5,
 ) {
-  ctx.font = `${bold ? '700' : '500'} ${size}px Arial, sans-serif`;
+  ctx.font = `${bold ? '700' : '500'} ${size}px Poppins, sans-serif`;
   const words = s.split(/\s+/);
   let line = '',
     list: string[] = [];
@@ -93,6 +94,18 @@ function lines(
 export function VRTabletScreen() {
   const game = useGame();
   const [page, setPage] = useState(0);
+  const [fontReady, setFontReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void loadPoppinsCanvas()
+      .then(() => {
+        if (alive) setFontReady(true);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   useEffect(() => setPage(0), [game.phase, game.questionIndex]);
   const lastActivation = useRef(0);
   const [hovered, setHovered] = useState(-1);
@@ -102,6 +115,7 @@ export function VRTabletScreen() {
   const clockRef = useRef<Clock>({ phase: '', seconds: null, duration: 0 });
   const timerBar = useRef<THREE.Mesh>(null);
   const [pressed, setPressed] = useState(-1);
+  const pressStartedAt = useRef(0);
   const [clock, setClock] = useState<Clock>({ phase: '', seconds: null, duration: 0 });
   useEffect(() => {
     const handler = (event: Event) => {
@@ -124,7 +138,9 @@ export function VRTabletScreen() {
     setHovered(index);
   };
   const setPress = (index: number) => {
+    if (pressedRef.current === index) return;
     pressedRef.current = index;
+    pressStartedAt.current = index >= 0 ? performance.now() : 0;
     setPressed(index);
   };
 
@@ -154,18 +170,31 @@ export function VRTabletScreen() {
       const base = override ?? (primary ? orange : '#2879be');
       const selected = hovered === index;
       const active = pressed === index;
-      const face = active
-        ? new THREE.Color(base).multiplyScalar(0.74).getStyle()
-        : selected
-          ? new THREE.Color(base).lerp(new THREE.Color('#ffffff'), 0.17).getStyle()
+      // All clickable controls share the same hover/press feedback,
+      // including colored quiz answers and secondary actions.
+      const baseColor = new THREE.Color(base);
+      // The whole face must brighten, not only its outline (lottery/feedback/start).
+      const face = selected
+        ? baseColor
+            .clone()
+            .lerp(new THREE.Color('#ffffff'), active ? 0.12 : 0.16)
+            .getStyle()
+        : active
+          ? baseColor.clone().multiplyScalar(0.7).getStyle()
           : base;
-      round(ctx, x, y + 6, w, h, 16, new THREE.Color(base).multiplyScalar(0.64).getStyle());
-      round(ctx, x, y + (active ? 4 : 0), w, h - (active ? 4 : 0), 16, face, base);
-      if (selected) {
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = new THREE.Color(base).lerp(new THREE.Color('#ffffff'), 0.4).getStyle();
-        ctx.stroke();
-      }
+      round(ctx, x, y + 6, w, h, 16, baseColor.clone().multiplyScalar(0.55).getStyle());
+      round(
+        ctx,
+        x,
+        y + (active ? 4 : selected ? -2 : 0),
+        w,
+        h - (active ? 4 : 0),
+        16,
+        face,
+        selected ? '#ffffff' : baseColor.clone().lerp(new THREE.Color('#ffffff'), 0.27).getStyle(),
+      );
+      // A borda já é desenhada em round(); evitar contorno duplicado e desproporcional.
+
       lines(
         ctx,
         label,
@@ -195,13 +224,6 @@ export function VRTabletScreen() {
           'right',
         );
       round(ctx, 52, 101, 1096, 12, 7, '#46748f');
-      // Initial visible fill: the animated overlay takes over as the clock runs.
-      const initialFraction =
-        clock.phase === game.phase && clock.duration > 0 && clock.seconds !== null
-          ? Math.max(0, Math.min(1, clock.seconds / clock.duration))
-          : 1;
-      // The fill is a GPU plane animated independently from the canvas.
-      void initialFraction;
       // The orange fill is drawn on a separate, frequently updated texture.
       // The static interface canvas is only regenerated when its contents change.
     };
@@ -434,8 +456,9 @@ export function VRTabletScreen() {
       }
       button('Entendi, continuar →', 365, 600, 470, 84, game.finishFeedback);
     } else if (phase === 'finished' || phase === 'bankEmpty') {
-      heading(phase === 'finished' ? '🏆 Classificação final' : 'Banco de questões esgotado', 120);
-      message(phase === 'finished' ? `${NAMES[game.winner ?? 0]} venceu!` : game.message, 220, 36);
+      if (phase === 'finished') timer('Retorno ao menu');
+      heading(phase === 'finished' ? '🏆 Classificação final' : 'Banco de questões esgotado', 180);
+      message(phase === 'finished' ? `${NAMES[game.winner ?? 0]} venceu!` : game.message, 255, 36);
       actions(
         [
           { label: 'Jogar novamente', action: () => game.restart(false), width: 548 },
@@ -455,11 +478,16 @@ export function VRTabletScreen() {
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 4;
     return t;
-  }, [game, page, hovered, pressed, clock]);
+  }, [game, page, hovered, pressed, clock, fontReady]);
   useEffect(() => () => texture?.dispose(), [texture]);
   // Animate the actual geometry each frame, not a CanvasTexture upload.
   // Both eyes in WebXR see the same bar, and the deadline is shared with desktop.
   useFrame(() => {
+    // WebXR hand pinches sometimes emit pointerdown without pointerup. A stale
+    // pressed state previously overrode the full-face hover with a dark fill.
+    if (pressedRef.current >= 0 && performance.now() - pressStartedAt.current > 180) {
+      setPress(-1);
+    }
     const bar = timerBar.current;
     if (!bar) return;
     const c = clockRef.current;
@@ -501,6 +529,8 @@ export function VRTabletScreen() {
     if (now - lastActivation.current < 350) return;
     lastActivation.current = now;
     playSound('select');
+    // Release visual press immediately; a VR select event may have no pointerup.
+    setPress(-1);
     hit.action();
   };
   const onAim = (e: { stopPropagation: () => void; pointerId: number; uv?: THREE.Vector2 }) => {
@@ -517,7 +547,10 @@ export function VRTabletScreen() {
       pointerLastSeen.current = now;
       const index = hitIndex(e.uv);
       setHover(index);
-      if (index < 0) hoverOwner.current = null;
+      if (index < 0) {
+        hoverOwner.current = null;
+        setPress(-1);
+      }
     }
   };
   const onExit = (e: { pointerId: number }) => {
@@ -528,7 +561,7 @@ export function VRTabletScreen() {
     }
   };
   return (
-    <group>
+    <group position={[0, 0, -0.025]}>
       <mesh
         position={[0, 0, 0.052]}
         renderOrder={15}
@@ -539,6 +572,7 @@ export function VRTabletScreen() {
           e.stopPropagation();
           if (hoverOwner.current === null) hoverOwner.current = e.pointerId;
           if (hoverOwner.current !== e.pointerId) return;
+          setHover(hitIndex(e.uv));
           setPress(hitIndex(e.uv));
           activate(e);
         }}
@@ -550,12 +584,7 @@ export function VRTabletScreen() {
         <planeGeometry args={[1.18, 0.7]} />
         <meshBasicMaterial map={texture} toneMapped={false} side={THREE.FrontSide} />
       </mesh>
-      <mesh
-        ref={timerBar}
-        position={[0, 0.247, 0.063]}
-        renderOrder={16}
-        raycast={() => null}
-      >
+      <mesh ref={timerBar} position={[0, 0.247, 0.063]} renderOrder={16} raycast={() => null}>
         <planeGeometry args={[1.078, 0.011]} />
         <meshBasicMaterial
           color={orange}

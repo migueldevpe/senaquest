@@ -355,6 +355,17 @@ export function FBXCharacter({
       joint.bone.quaternion.multiply(idleQ);
     }
 
+    // Compensação local do punho na comemoração: não altera a elevação do braço.
+    // Valor conservador para não quebrar as outras animações.
+    if (champion > 0.001) {
+      const rightWrist = joints.get('RightHand');
+      if (rightWrist) {
+        idleEuler.set(0, 0, -0.32 * champion);
+        idleQ.setFromEuler(idleEuler);
+        rightWrist.bone.quaternion.multiply(idleQ);
+      }
+    }
+
     // Idle orgânico: frequências desencontradas para evitar movimento robótico.
     // Os ângulos são locais e pequenos; preservamos a pose sentada aprovada.
     const breathe = Math.sin(now * 1.85) * 0.022 + Math.sin(now * 0.81) * 0.007;
@@ -415,9 +426,7 @@ export function FBXCharacter({
           color={color}
           height={
             isChampion
-              ? settings.crownHeight +
-                CROWN_TOP_OFFSET * settings.crownScale +
-                (settings.nameHeight - 2.35)
+              ? settings.nameHeight + CROWN_TOP_OFFSET * settings.crownScale
               : settings.nameHeight
           }
         />

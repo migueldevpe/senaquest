@@ -1,32 +1,14 @@
 import { useEffect, useMemo } from 'react';
+import { useLoader } from '@react-three/fiber';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { useGame } from '../game/store';
 
-/** Coroa baixa, com aro contínuo e cinco recortes discretos.
- * A geometria é compartilhada entre personagens e não depende da câmera.
- * O topo fica aproximadamente 0,19 unidade acima da posição do acessório.
- */
-const crownGold = new THREE.MeshStandardMaterial({
-  color: '#dba72f',
-  metalness: 0.55,
-  roughness: 0.34,
-});
-const crownRim = new THREE.MeshStandardMaterial({
-  color: '#f5d47c',
-  metalness: 0.5,
-  roughness: 0.3,
-});
-const crownGem = new THREE.MeshStandardMaterial({
-  color: '#166ab2',
-  metalness: 0.15,
-  roughness: 0.25,
-});
-const crownBand = new THREE.CylinderGeometry(0.2, 0.205, 0.105, 32, 1, true);
-const crownLip = new THREE.TorusGeometry(0.203, 0.014, 7, 32);
-const crownTip = new THREE.SphereGeometry(0.028, 10, 8);
-const crownJewel = new THREE.OctahedronGeometry(0.034, 0);
-export const CROWN_TOP_OFFSET = 0.12;
+/** Coroa FBX compartilhada, normalizada pela caixa do modelo.
+ * Os offsets individuais dos personagens continuam no FBXCharacter. */
+export const CROWN_TOP_OFFSET = 0.25;
+const CROWN_TARGET_WIDTH = 0.39;
 export function Crown({
   position,
   scale = 1,
@@ -34,33 +16,59 @@ export function Crown({
   position: [number, number, number];
   scale?: number;
 }) {
+  const source = useLoader(FBXLoader, '/models/crownwin.fbx');
+  // FBX não garante a associação automática dos mapas externos exportados do Blender.
+  // Texturas mantidas separadas em WebP para ajustes futuros.
+  const [colorMap, normalMap] = useLoader(THREE.TextureLoader, [
+    '/models/crown-texture_crown.webp',
+    '/models/crown-normal_map.webp',
+  ]);
+  const crownMaterial = useMemo(() => {
+    colorMap.colorSpace = THREE.SRGBColorSpace;
+    normalMap.colorSpace = THREE.NoColorSpace;
+    // Texturas externas do FBX usam a orientação convencional do TextureLoader.
+    colorMap.flipY = true;
+    normalMap.flipY = true;
+    colorMap.wrapS = colorMap.wrapT = THREE.RepeatWrapping;
+    normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+    colorMap.needsUpdate = true;
+    normalMap.needsUpdate = true;
+    return new THREE.MeshStandardMaterial({
+      map: colorMap,
+      normalMap,
+      color: '#ffffff',
+      metalness: 0.35,
+      roughness: 0.58,
+      side: THREE.DoubleSide,
+    });
+  }, [colorMap, normalMap]);
+  const { model, factor, origin } = useMemo(() => {
+    const model = source.clone(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const size = box.getSize(new THREE.Vector3());
+    const center = box.getCenter(new THREE.Vector3());
+    model.traverse((obj) => {
+      if (!(obj instanceof THREE.Mesh)) return;
+      obj.castShadow = false;
+      obj.receiveShadow = false;
+      // Material único preserva o atlas UV sem depender dos materiais FBX originais.
+      obj.material = crownMaterial;
+    });
+    return {
+      model,
+      factor: CROWN_TARGET_WIDTH / Math.max(size.x, size.z, 0.001),
+      origin: [-center.x, -box.min.y, -center.z] as [number, number, number],
+    };
+  }, [source, crownMaterial]);
   return (
     <group position={position} scale={scale}>
-      <mesh geometry={crownBand} material={crownGold} />
-      <mesh
-        geometry={crownLip}
-        material={crownRim}
-        rotation={[Math.PI / 2, 0, 0]}
-        position={[0, -0.05, 0]}
-      />
-      <mesh
-        geometry={crownLip}
-        material={crownRim}
-        rotation={[Math.PI / 2, 0, 0]}
-        position={[0, 0.05, 0]}
-      />
-      {Array.from({ length: 5 }, (_, i) => {
-        const angle = (i * Math.PI * 2) / 5;
-        return (
-          <group key={i} position={[Math.sin(angle) * 0.18, 0.073, Math.cos(angle) * 0.18]}>
-            <mesh geometry={crownTip} material={crownGold} scale={[0.95, 1.55, 0.95]} />
-          </group>
-        );
-      })}
-      <mesh geometry={crownJewel} material={crownGem} position={[0, 0.012, 0.207]} />
+      <group scale={factor}>
+        <primitive object={model} position={origin} />
+      </group>
     </group>
   );
 }
+useLoader.preload(FBXLoader, '/models/crownwin.fbx');
 
 // A câmera do jogador é em primeira pessoa: uma coroa ancorada nela
 // invadia a visão e virava um polígono gigante ao olhar para cima.
@@ -72,7 +80,7 @@ function Confetti({ winner }: { winner: number }) {
     () =>
       new THREE.PointsMaterial({
         vertexColors: true,
-        size: 0.095,
+        size: 0.067,
         sizeAttenuation: true,
         transparent: true,
         opacity: 1,

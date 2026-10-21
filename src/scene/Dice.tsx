@@ -1,3 +1,4 @@
+import { POPPINS_3D } from './poppins';
 import { useEffect, useRef, useState } from 'react';
 import { RoundedBox, Text, Billboard } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
@@ -443,6 +444,7 @@ function DieBody({
                 />
               </mesh>
               <Text
+                font={POPPINS_3D}
                 renderOrder={10000}
                 position={[0, 0, 0.012]}
                 fontSize={0.28}

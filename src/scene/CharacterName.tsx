@@ -1,3 +1,4 @@
+import { POPPINS_3D } from './poppins';
 import { Billboard, Text } from '@react-three/drei';
 
 /** Rótulo compartilhado: sempre voltado para a câmera, inclusive em VR. */
@@ -13,6 +14,7 @@ export function CharacterName({
   return (
     <Billboard position={[0, height, 0]} follow>
       <Text
+        font={POPPINS_3D}
         fontSize={0.23}
         color={color}
         outlineWidth={0.014}

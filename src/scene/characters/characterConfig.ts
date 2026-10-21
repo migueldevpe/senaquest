@@ -29,8 +29,18 @@ export const CHARACTER_CONFIG = {
     crownHeight: 2.39,
     crownScale: 0.93,
   },
+  claudinha: {
+    targetHeight: 2.4, // Altura solicitada para a Claudinha.
+    seatTop: 0.805,
+    hipClearance: 0.19,
+    seatDepthOffset: 0.07,
+    nameHeight: 2.425,
+    crownHeight: 2.19,
+    crownScale: 0.93,
+  },
 } as const satisfies {
   textureAnisotropy: number;
   chico: CharacterSettings;
   paty: CharacterSettings;
+  claudinha: CharacterSettings;
 };
