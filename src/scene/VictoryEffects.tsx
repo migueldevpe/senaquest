@@ -20,8 +20,8 @@ export function Crown({
   // FBX não garante a associação automática dos mapas externos exportados do Blender.
   // Texturas mantidas separadas em WebP para ajustes futuros.
   const [colorMap, normalMap] = useLoader(THREE.TextureLoader, [
-    '/models/crown-texture_crown.webp',
-    '/models/crown-normal_map.webp',
+    '/models/crownwin/crown-texture_crown.webp',
+    '/models/crownwin/crown-normal_map.webp',
   ]);
   const crownMaterial = useMemo(() => {
     colorMap.colorSpace = THREE.SRGBColorSpace;
