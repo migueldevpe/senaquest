@@ -1,12 +1,11 @@
 import { POPPINS_3D } from './poppins';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
 import { XR, XROrigin, createXRStore } from '@react-three/xr';
 import { VRInterface } from './VRInterface';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
-import { useMemo } from 'react';
 import { COLORS, NAMES, colorIndex } from '../game/data';
 import { PLAYER_COLORS } from '../game/playerVisual';
 import { useGame } from '../game/store';
@@ -35,15 +34,12 @@ const BOARD_VISUAL = {
   numberOutline: 0.012,
   tileRoughness: 0.74,
   activePawnOpacity: 0.72,
-  pawnFadeSpeed: 11,
+  pawnFadeSpeed: 3.5,
   pawnStepSeconds: 0.3,
   pawnHopHeight: 0.39,
 } as const;
 export const PAWN_COLORS = PLAYER_COLORS;
-// Geometrias dos pinos compartilhadas entre os jogadores.
-const PAWN_BASE = new THREE.CylinderGeometry(0.145, 0.17, 0.13, 20);
-const PAWN_BODY = new THREE.CylinderGeometry(0.07, 0.115, 0.23, 20);
-const PAWN_HEAD = new THREE.SphereGeometry(0.1, 16, 12);
+// O visual do Peão de Jornada vem do FBX; a lógica de movimento permanece neste arquivo.
 
 // Etiqueta plana com cantos arredondados, sem espessura nem sombra 3D.
 const NUMBER_BADGE = (() => {
@@ -80,7 +76,31 @@ const NUMBER_BADGE_MATERIAL = new THREE.MeshBasicMaterial({
   polygonOffsetUnits: -4,
   depthTest: true,
   depthWrite: false,
+  toneMapped: false, // cor exata do HUD da casa, sem ajuste pela iluminacao do ambiente
 });
+// Destaque somente na plaquinha do numero; a cor pedagogica da casa nao muda.
+const BENEFIT_BADGE_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#168449',
+  side: THREE.DoubleSide,
+  polygonOffset: true,
+  polygonOffsetFactor: -4,
+  polygonOffsetUnits: -4,
+  depthTest: true,
+  depthWrite: false,
+  toneMapped: false,
+});
+const PENALTY_BADGE_MATERIAL = new THREE.MeshBasicMaterial({
+  color: '#bd3434',
+  side: THREE.DoubleSide,
+  polygonOffset: true,
+  polygonOffsetFactor: -4,
+  polygonOffsetUnits: -4,
+  depthTest: true,
+  depthWrite: false,
+  toneMapped: false,
+});
+const BENEFIT_HOUSES = new Set([11, 18, 25]);
+const PENALTY_HOUSES = new Set([10, 12, 17, 19, 24, 26]);
 
 export const xrStore = createXRStore({
   controller: { rayPointer: true, grabPointer: false },
@@ -111,7 +131,16 @@ function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => voi
         rotation={[-Math.PI / 2, 0, 0]}
       >
         <primitive object={NUMBER_BADGE} attach="geometry" />
-        <primitive object={NUMBER_BADGE_MATERIAL} attach="material" />
+        <primitive
+          object={
+            BENEFIT_HOUSES.has(n)
+              ? BENEFIT_BADGE_MATERIAL
+              : PENALTY_HOUSES.has(n)
+                ? PENALTY_BADGE_MATERIAL
+                : NUMBER_BADGE_MATERIAL
+          }
+          attach="material"
+        />
       </mesh>
       <Text
         font={POPPINS_3D}
@@ -163,6 +192,63 @@ function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => voi
     </group>
   );
 }
+/** Peão de Jornada: uma instância colorida por personagem, sem alterar regras ou movimento. */
+function JourneyPawn({
+  index,
+  materials,
+}: {
+  index: number;
+  materials: React.RefObject<THREE.MeshStandardMaterial[]>;
+}) {
+  const source = useLoader(FBXLoader, '/models/pawn/pawn.fbx');
+  const model = useMemo(() => {
+    const instance = source.clone(true);
+    // Normaliza a altura e apoia a base no chão, independentemente das unidades do FBX.
+    instance.updateMatrixWorld(true);
+    const bounds = new THREE.Box3().setFromObject(instance);
+    const size = bounds.getSize(new THREE.Vector3());
+    const scale = 0.47 / Math.max(size.y, 0.0001);
+    instance.scale.multiplyScalar(scale);
+    instance.updateMatrixWorld(true);
+    const scaled = new THREE.Box3().setFromObject(instance);
+    instance.position.y -= scaled.min.y;
+    const center = scaled.getCenter(new THREE.Vector3());
+    instance.position.x -= center.x;
+    instance.position.z -= center.z;
+    const ownMaterials: THREE.MeshStandardMaterial[] = [];
+    instance.traverse((object) => {
+      if (!(object instanceof THREE.Mesh)) return;
+      object.castShadow = true;
+      object.receiveShadow = true;
+      // Material próprio por jogador para preservar cor e transparência independentes.
+      const original = Array.isArray(object.material) ? object.material : [object.material];
+      const colored = original.map(() => {
+        const material = new THREE.MeshStandardMaterial({
+          color: PLAYER_COLORS[index],
+          roughness: 0.38,
+          metalness: 0.08,
+          transparent: true,
+          opacity: 1,
+          depthWrite: true,
+          side: THREE.FrontSide,
+        });
+        ownMaterials.push(material);
+        return material;
+      });
+      object.material = Array.isArray(object.material) ? colored : colored[0];
+    });
+    return { instance, ownMaterials };
+  }, [source, index]);
+  useEffect(() => {
+    materials.current = model.ownMaterials;
+    return () => {
+      if (materials.current === model.ownMaterials) materials.current = [];
+      model.ownMaterials.forEach((material) => material.dispose());
+    };
+  }, [materials, model]);
+  return <primitive object={model.instance} />;
+}
+
 function Token({ index, boardFade }: { index: number; boardFade: React.RefObject<number> }) {
   const position = useGame((state) => state.players[index].position);
   const active = useGame(
@@ -191,7 +277,7 @@ function Token({ index, boardFade }: { index: number; boardFade: React.RefObject
     }
     const target = active ? BOARD_VISUAL.activePawnOpacity : 1;
     alpha.current = THREE.MathUtils.damp(alpha.current, target, BOARD_VISUAL.pawnFadeSpeed, delta);
-    if (Math.abs(alpha.current - target) < 0.001) alpha.current = target;
+    if (Math.abs(alpha.current - target) < 0.0005) alpha.current = target;
     const visibleAlpha = alpha.current * boardFade.current;
     for (const material of materials.current) {
       if (!material) continue;
@@ -240,48 +326,7 @@ function Token({ index, boardFade }: { index: number; boardFade: React.RefObject
     >
       {/* Sombra de contato difusa escura; não é anel nem destaque de seleção. */}
       <StaticContactShadow position={[0, -0.006, 0]} size={[0.42, 0.34]} opacity={0.16} />
-      <mesh castShadow position={[0, 0.065, 0]}>
-        <primitive object={PAWN_BASE} attach="geometry" />
-        <meshStandardMaterial
-          ref={(m) => {
-            if (m) materials.current[0] = m;
-          }}
-          color={PAWN_COLORS[index]}
-          roughness={0.38}
-          transparent
-          opacity={1}
-          depthWrite
-          side={THREE.FrontSide}
-        />
-      </mesh>
-      <mesh castShadow position={[0, 0.22, 0]}>
-        <primitive object={PAWN_BODY} attach="geometry" />
-        <meshStandardMaterial
-          ref={(m) => {
-            if (m) materials.current[1] = m;
-          }}
-          color={PAWN_COLORS[index]}
-          roughness={0.38}
-          transparent
-          opacity={1}
-          depthWrite
-          side={THREE.FrontSide}
-        />
-      </mesh>
-      <mesh castShadow position={[0, 0.365, 0]}>
-        <primitive object={PAWN_HEAD} attach="geometry" />
-        <meshStandardMaterial
-          ref={(m) => {
-            if (m) materials.current[2] = m;
-          }}
-          color={PAWN_COLORS[index]}
-          roughness={0.38}
-          transparent
-          opacity={1}
-          depthWrite
-          side={THREE.FrontSide}
-        />
-      </mesh>
+      <JourneyPawn index={index} materials={materials} />
     </group>
   );
 }
@@ -289,57 +334,15 @@ function Board() {
   const phase = useGame((s) => s.phase);
   const root = useRef<THREE.Group>(null);
   const progress = useRef(0);
-  const lastFade = useRef(-1);
   const readyTexts = useRef(new Set<string>());
   const [textsReady, setTextsReady] = useState(false);
-  const cachedMeshes = useRef<Array<{ mesh: THREE.Mesh; layer: number; isText: boolean }>>([]);
-  const cachedMaterials = useRef<THREE.Material[]>([]);
-  // 30 numeros + 6 marcadores de evento + INICIO e CHEGADA.
+  // O tabuleiro não modifica materiais compartilhados nem o estado do renderer.
+  // Isso elimina a mutação de shaders/transparência no instante do sorteio.
   const onTextReady = useCallback((key: string) => {
     if (readyTexts.current.has(key)) return;
     readyTexts.current.add(key);
     if (readyTexts.current.size === 38) setTextsReady(true);
   }, []);
-  // Construir a lista uma única vez: antes, cada frame atravessava toda a
-  // hierarquia e procurava ancestrais para cada mesh durante o fade.
-  useEffect(() => {
-    if (!textsReady || !root.current) return;
-    const board = root.current;
-    const entries: typeof cachedMeshes.current = [];
-    const materials = new Set<THREE.Material>();
-    board.traverse((object) => {
-      const mesh = object as THREE.Mesh;
-      if (!mesh.isMesh || !mesh.material) return;
-      let ancestor: THREE.Object3D | null = mesh;
-      let isToken = false;
-      let layer = 0;
-      while (ancestor && ancestor !== board) {
-        if (ancestor.name === 'board-tokens') isToken = true;
-        if (ancestor.name === 'board-tiles') layer = 20;
-        ancestor = ancestor.parent;
-      }
-      if (isToken) return;
-      const isText = Boolean((mesh as THREE.Mesh & { isTroikaText?: boolean }).isTroikaText);
-      if (isText) layer += 10;
-      entries.push({ mesh, layer, isText });
-      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
-        materials.add(material);
-      }
-    });
-    cachedMeshes.current = entries;
-    cachedMaterials.current = [...materials];
-    // Nunca tornar o tabuleiro visível para pré-compilar: isso causava
-    // um quadro isolado de tabuleiro durante a tela inicial.
-  }, [textsReady]);
-  // Guarda a opacidade ORIGINAL por material, inclusive textos carregados depois.
-  // Não clonamos nem descartamos materiais: evita o bug do StrictMode em que
-  // a segunda montagem guardava opacidade=0 como se fosse a original.
-  const originals = useRef(
-    new WeakMap<
-      THREE.Material,
-      { opacity: number; transparent: boolean; depthWrite: boolean; alphaHash: boolean }
-    >(),
-  );
   const revealed = !['choose', 'confirm', 'intro'].includes(phase);
   const canReveal = revealed && textsReady;
 
@@ -351,46 +354,10 @@ function Board() {
     if (Math.abs(progress.current - target) < 0.001) progress.current = target;
     const t = progress.current;
     const eased = t * t * (3 - 2 * t);
-    // O tabuleiro estático não precisa percorrer dezenas de meshes em todo frame.
-    // A passagem final ainda restaura a escrita de profundidade dos materiais.
-    const settled = t === target && (t === 0 || t === 1);
-    if (settled && lastFade.current === t) return;
-    lastFade.current = t;
-    // A escala continua, mas a cor-base dos materiais nunca muda.
+    // Entrada por escala apenas. Nunca tocar em opacity, transparent,
+    // depthWrite, alphaHash ou renderOrder de materiais da cena.
     group.scale.setScalar(0.4 * (0.94 + 0.06 * eased));
-    // Invisível durante seleção; visível assim que o sorteio começa.
     group.visible = canReveal || t > 0.001;
-    for (const { mesh, layer, isText } of cachedMeshes.current) {
-      // Preservar as posições e as prioridades das placas e números.
-      if (mesh.name === 'number-badge') mesh.renderOrder = 30;
-      else if (isText) mesh.renderOrder = 31;
-      else mesh.renderOrder = t >= 0.999 ? 0 : layer;
-    }
-    // Materiais compartilhados entre várias casas são atualizados uma única vez.
-    for (const material of cachedMaterials.current) {
-      if (!originals.current.has(material)) {
-        originals.current.set(material, {
-          opacity: material.opacity,
-          transparent: material.transparent,
-          depthWrite: material.depthWrite,
-          alphaHash: material.alphaHash,
-        });
-      }
-      const original = originals.current.get(material)!;
-      const fading = t < 0.999;
-      // Sem alphaHash, e sem deixar o tabuleiro permanentemente transparente.
-      if (
-        material.transparent !== (fading || original.transparent) ||
-        material.depthWrite !== (fading ? false : original.depthWrite) ||
-        material.alphaHash
-      ) {
-        material.transparent = fading || original.transparent;
-        material.depthWrite = fading ? false : original.depthWrite;
-        material.alphaHash = false;
-        material.needsUpdate = true;
-      }
-      material.opacity = original.opacity * (fading ? eased : 1);
-    }
   });
   return (
     <group ref={root} position={[0, 1.04, 0]} scale={0.4} visible={false}>
@@ -578,8 +545,8 @@ function TestFBXChair({
   player?: boolean;
 }) {
   const config = player ? PLAYER_CHAIR : TEST_CHAIR;
-  const source = useLoader(FBXLoader, '/models/main_chair.fbx');
-  const chairTexture = useLoader(THREE.TextureLoader, '/models/main_chair-color.webp');
+  const source = useLoader(FBXLoader, '/models/main_chair/main_chair.fbx');
+  const chairTexture = useLoader(THREE.TextureLoader, '/models/main_chair/main_chair-color.webp');
   chairTexture.colorSpace = THREE.SRGBColorSpace;
   chairTexture.flipY = true;
   const { model, scale, centerX, minY, centerZ } = useMemo(() => {
@@ -637,37 +604,6 @@ function TestFBXChair({
           <primitive object={model} position={[-centerX, -minY, -centerZ]} />
         </group>
       </group>
-    </group>
-  );
-}
-function Chair({
-  position,
-  rotation = 0,
-}: {
-  position: [number, number, number];
-  rotation?: number;
-}) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <StaticContactShadow position={[0, 0.008, 0]} size={[1.55, 1.5]} opacity={0.27} />
-      <RoundedBox args={[1.15, 0.15, 1.07]} radius={0.09} position={[0, 0.73, 0]} castShadow>
-        <meshStandardMaterial color="#304e68" roughness={0.87} />
-      </RoundedBox>
-      <RoundedBox args={[1.11, 1.03, 0.13]} radius={0.075} position={[0, 1.36, -0.48]} castShadow>
-        <meshStandardMaterial color="#304e68" roughness={0.85} />
-      </RoundedBox>
-      <mesh position={[0, 0.62, 0]}>
-        <cylinderGeometry args={[0.105, 0.105, 0.19, 12]} />
-        <meshStandardMaterial color="#556574" metalness={0.25} />
-      </mesh>
-      {[-0.42, 0.42].flatMap((x) =>
-        [-0.39, 0.39].map((z) => (
-          <mesh key={`${x}-${z}`} position={[x, 0.31, z]} castShadow>
-            <boxGeometry args={[0.075, 0.62, 0.075]} />
-            <meshStandardMaterial color="#465766" metalness={0.24} roughness={0.66} />
-          </mesh>
-        )),
-      )}
     </group>
   );
 }
@@ -965,31 +901,162 @@ function FixedSeatCamera() {
   });
   return null;
 }
+/**
+ * Iluminacao da sala, isolada do provider WebXR e das mudancas de fase.
+ * Ha uma unica instancia de cada luz em toda a sessao, criada acima de XR.
+ * Os valores sao os mesmos da versao anterior; nenhum ajuste estetico aqui.
+ */
+const STABLE_LIGHTS = {
+  ambient: { intensity: 0.66, color: '#ffffff' },
+  hemisphere: { intensity: 0.65, sky: '#ffffff', ground: '#b8c2c9' },
+  directional: {
+    intensity: 1.1,
+    color: '#ffffff',
+    position: [3, 9, 5] as [number, number, number],
+  },
+} as const;
+const STABLE_LIGHT_NAMES = new Set([
+  'senaquest-light-ambient',
+  'senaquest-light-hemisphere',
+  'senaquest-light-directional',
+]);
+function StableRoomLighting() {
+  const { scene } = useThree();
+  const ambientRef = useRef<THREE.AmbientLight>(null);
+  const hemisphereRef = useRef<THREE.HemisphereLight>(null);
+  const directionalRef = useRef<THREE.DirectionalLight>(null);
+  const phase = useGame((state) => state.phase);
+  const lastPhase = useRef<string | null>(null);
+  const sampling = useRef(0);
+  const warned = useRef(new Set<string>());
+
+  useFrame((state, delta) => {
+    const ambient = ambientRef.current;
+    const hemisphere = hemisphereRef.current;
+    const directional = directionalRef.current;
+    if (!ambient || !hemisphere || !directional) return;
+    // Repõe o contrato luminoso se alguma biblioteca mudar as luzes existentes.
+    ambient.intensity = STABLE_LIGHTS.ambient.intensity;
+    hemisphere.intensity = STABLE_LIGHTS.hemisphere.intensity;
+    directional.intensity = STABLE_LIGHTS.directional.intensity;
+    ambient.color.set(STABLE_LIGHTS.ambient.color);
+    hemisphere.color.set(STABLE_LIGHTS.hemisphere.sky);
+    hemisphere.groundColor.set(STABLE_LIGHTS.hemisphere.ground);
+    directional.color.set(STABLE_LIGHTS.directional.color);
+    directional.position.set(...STABLE_LIGHTS.directional.position);
+    ambient.visible = hemisphere.visible = directional.visible = true;
+
+    // Inspecionar outras fontes de luz no inicio de cada fase e a cada 0,5s;
+    // atravessar a cena a cada quadro prejudicaria o desempenho do Quest.
+    sampling.current += delta;
+    const changedPhase = lastPhase.current !== phase;
+    if (!changedPhase && sampling.current < 0.5) return;
+    sampling.current = 0;
+    lastPhase.current = phase;
+    const lights: THREE.Light[] = [];
+    scene.traverse((object) => {
+      // `isLight` tambem identifica objetos de outra copia de Three.js.
+      if ((object as unknown as THREE.Light).isLight) {
+        lights.push(object as unknown as THREE.Light);
+      }
+    });
+    const rogue = lights.filter((light) => !STABLE_LIGHT_NAMES.has(light.name));
+    // So ha 3 luzes autorizadas em todo o projeto. Luzes extras sao
+    // desativadas preventivamente para nao alterar o brilho na entrada.
+    // `isLight` acima cobre tambem instancias de Three.js distintas.
+    for (const light of rogue) light.visible = false;
+    if (rogue.length && import.meta.env.DEV) {
+      for (const light of rogue) {
+        if (warned.current.has(light.uuid)) continue;
+        warned.current.add(light.uuid);
+        console.warn('[SENAQUEST] Luz externa detectada; possivel causa de alteracao de brilho:', {
+          name: light.name,
+          type: light.type,
+          intensity: light.intensity,
+          uuid: light.uuid,
+        });
+      }
+    }
+    if (changedPhase && import.meta.env.DEV) {
+      const summary = lights.map((light) => ({
+        name: light.name || '(sem nome)',
+        type: light.type,
+        intensity: Number(light.intensity.toFixed(3)),
+        visible: light.visible,
+        color: '#' + light.color.getHexString(),
+        position: light.position.toArray().map((n) => Number(n.toFixed(3))),
+      }));
+      // String serializada no momento da medicao: o DevTools nao mostrara
+      // o estado posterior de um objeto por referencia.
+      console.info(
+        '[SENAQUEST] LUZES FIXAS / fase=' +
+          phase +
+          ' ' +
+          JSON.stringify({
+            count: lights.length,
+            lights: summary,
+            xr: state.gl.xr.isPresenting,
+            colorManagement: THREE.ColorManagement.enabled,
+            renderer: {
+              toneMapping: state.gl.toneMapping,
+              exposure: state.gl.toneMappingExposure,
+              colorSpace: state.gl.outputColorSpace,
+            },
+          }),
+      );
+    }
+  }, -101);
+  return (
+    <>
+      <ambientLight
+        ref={ambientRef}
+        name="senaquest-light-ambient"
+        color={STABLE_LIGHTS.ambient.color}
+        intensity={STABLE_LIGHTS.ambient.intensity}
+      />
+      <hemisphereLight
+        ref={hemisphereRef}
+        name="senaquest-light-hemisphere"
+        args={[
+          STABLE_LIGHTS.hemisphere.sky,
+          STABLE_LIGHTS.hemisphere.ground,
+          STABLE_LIGHTS.hemisphere.intensity,
+        ]}
+      />
+      <directionalLight
+        ref={directionalRef}
+        name="senaquest-light-directional"
+        position={STABLE_LIGHTS.directional.position}
+        color={STABLE_LIGHTS.directional.color}
+        intensity={STABLE_LIGHTS.directional.intensity}
+      />
+    </>
+  );
+}
+
 function Classroom() {
   return (
     <>
       <color attach="background" args={['#e4e8e7']} />
-      <ambientLight intensity={0.66} />
-      <hemisphereLight args={['#fff3dc', '#819bb0', 0.88]} />
-      <directionalLight position={[3, 9, 5]} intensity={2.25} color="#ffe5bc" />
-      <directionalLight position={[-4, 5, -3]} intensity={0.55} color="#b4d5ff" />
+      {/* Luzes transferidas para StableRoomLighting, FORA do XR.
+          Não renderizar uma segunda fonte de luz dentro de Classroom. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[16, 16]} />
         <meshStandardMaterial color="#d8e0dd" />
       </mesh>
-      <mesh position={[0, 2.6, -8]}>
+      <mesh name="room-wall-back" position={[0, 2.6, -8]}>
         <boxGeometry args={[16, 5.2, 0.18]} />
         <meshStandardMaterial color="#e6edf0" />
       </mesh>
-      <mesh position={[0, 2.6, 8]}>
+      <mesh name="room-wall-front" position={[0, 2.6, 8]}>
         <boxGeometry args={[16, 5.2, 0.18]} />
         <meshStandardMaterial color="#e6edf0" />
       </mesh>
-      <mesh position={[-8, 2.6, 0]}>
+      <mesh name="room-wall-left" position={[-8, 2.6, 0]}>
         <boxGeometry args={[0.18, 5.2, 16]} />
         <meshStandardMaterial color="#f0eae0" />
       </mesh>
-      <mesh position={[8, 2.6, 0]}>
+      <mesh name="room-wall-right" position={[8, 2.6, 0]}>
         <boxGeometry args={[0.18, 5.2, 16]} />
         <meshStandardMaterial color="#f0eae0" />
       </mesh>
@@ -1126,8 +1193,8 @@ function VRPinchCameraRig() {
           const source = hands.find((hand) => hand.handedness === handedness);
           const thumb = source?.hand?.get('thumb-tip');
           const index = source?.hand?.get('index-finger-tip');
-          const a = thumb && frame.getJointPose(thumb, space);
-          const b = index && frame.getJointPose(index, space);
+          const a = thumb && frame.getJointPose?.(thumb, space);
+          const b = index && frame.getJointPose?.(index, space);
           if (!a || !b) {
             pinching.current[i] = false;
             return false;
@@ -1206,6 +1273,92 @@ function VRPinchCameraRig() {
   );
 }
 
+/**
+ * Contrato visual do renderizador.
+ * IMPORTANTE: `toneMapping` NAO e uma propriedade de <Canvas>. Passa-la
+ * diretamente ao Canvas encaminha a prop para um elemento HTML (erro React).
+ * A configuracao deve ser aplicada ao WebGLRenderer real via onCreated.
+ */
+const RENDER_COLOR = {
+  toneMapping: THREE.ACESFilmicToneMapping,
+  exposure: 1,
+  colorSpace: THREE.SRGBColorSpace,
+} as const;
+
+function enforceRendererColor(gl: THREE.WebGLRenderer, warn = false) {
+  const changed =
+    gl.toneMapping !== RENDER_COLOR.toneMapping ||
+    Math.abs(gl.toneMappingExposure - RENDER_COLOR.exposure) > 0.0001 ||
+    gl.outputColorSpace !== RENDER_COLOR.colorSpace;
+  if (!changed) return;
+  if (warn && import.meta.env.DEV) {
+    console.warn('[SENAQUEST] Configuracao de cor do WebGLRenderer alterada; restaurando.', {
+      toneMapping: gl.toneMapping,
+      exposure: gl.toneMappingExposure,
+      outputColorSpace: gl.outputColorSpace,
+    });
+  }
+  gl.toneMapping = RENDER_COLOR.toneMapping;
+  gl.toneMappingExposure = RENDER_COLOR.exposure;
+  gl.outputColorSpace = RENDER_COLOR.colorSpace;
+}
+
+/**
+ * Verifica se uma biblioteca altera o renderizador durante a partida.
+ * Faz o registro SOMENTE nas trocas de fase, para podermos diagnosticar
+ * mudancas reais em luz, material ou renderer, sem logs por quadro.
+ * O FPS so paga tres comparacoes de propriedades simples por quadro.
+ */
+function RenderingConsistencyGuard() {
+  const { gl, scene, camera } = useThree();
+  const phase = useGame((state) => state.phase);
+  const lastPhase = useRef<string | null>(null);
+  useFrame(() => {
+    enforceRendererColor(gl, true);
+    if (!import.meta.env.DEV || lastPhase.current === phase) return;
+    lastPhase.current = phase;
+    const lights: Array<{
+      name: string;
+      type: string;
+      intensity: number;
+      visible: boolean;
+      color: string;
+    }> = [];
+    scene.traverse((node) => {
+      if (!(node instanceof THREE.Light)) return;
+      lights.push({
+        name: node.name || '(sem nome)',
+        type: node.type,
+        intensity: node.intensity,
+        visible: node.visible,
+        color: `#${node.color.getHexString()}`,
+      });
+    });
+    const walls = ['back', 'front', 'left', 'right'].map((side) => {
+      const object = scene.getObjectByName(`room-wall-${side}`) as THREE.Mesh | undefined;
+      const material = object?.material;
+      return {
+        side,
+        color:
+          material instanceof THREE.MeshStandardMaterial
+            ? `#${material.color.getHexString()}`
+            : '(nao encontrado)',
+      };
+    });
+    console.info('[SENAQUEST] Diagnostico de iluminacao / fase:', {
+      phase,
+      toneMapping: gl.toneMapping,
+      exposure: gl.toneMappingExposure,
+      outputColorSpace: gl.outputColorSpace,
+      cameraPosition: camera.position.toArray(),
+      cameraRotation: camera.rotation.toArray(),
+      lights,
+      walls,
+    });
+  }, -100);
+  return null;
+}
+
 export function World() {
   const mobileXR =
     typeof navigator !== 'undefined' && /OculusBrowser|Quest|Android/i.test(navigator.userAgent);
@@ -1215,10 +1368,15 @@ export function World() {
       <Canvas
         dpr={[1, quality]}
         shadows={false}
+        flat={false}
+        onCreated={({ gl }) => enforceRendererColor(gl)}
         camera={{ position: [0, 1.91 + DESKTOP_CAMERA_HEIGHT_BONUS, 3.32], fov: 65 }}
         gl={{ antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: false }}
       >
+        {/* Luzes fora do XR: o spawn do tabuleiro nao pode remontar o rig luminoso. */}
+        <StableRoomLighting />
         <XR store={xrStore}>
+          <RenderingConsistencyGuard />
           <CalibratedXROrigin />
           <VRInterface />
           <Classroom />

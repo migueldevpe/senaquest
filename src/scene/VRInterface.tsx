@@ -7,9 +7,8 @@ import { RoundedBox, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { COURSES, NAMES } from '../game/data';
 import { VRTabletScreen } from './VRTabletScreen';
-import { useGame, currentPlayer, currentQuestion } from '../game/store';
+import { useGame, currentPlayer } from '../game/store';
 
-const NAVY = '#003b6a';
 // Um único deslocamento local para os três tablets dos bots.
 // Z negativo aproxima os tablets da mesa, sem afetar o jogador principal.
 const BOT_TABLET_EDGE_OFFSET = -0.075;

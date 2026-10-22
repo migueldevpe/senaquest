@@ -1,11 +1,38 @@
-import { colorIndex, PENALTIES } from './data';
+import { colorIndex } from './data';
 export const clamp = (v: number) => Math.max(0, Math.min(30, v));
+/** Casas especiais da planilha aprovada. Não encadeamos eventos. */
+export const SPECIAL_SQUARES: Record<
+  number,
+  {
+    kind: 'malefit' | 'benefit';
+    destination?: number;
+    skipTurns?: number;
+    immunity?: boolean;
+    swapLast?: boolean;
+  }
+> = {
+  10: { kind: 'malefit', skipTurns: 1 },
+  11: { kind: 'benefit', immunity: true },
+  12: { kind: 'malefit', destination: 9 },
+  17: { kind: 'malefit', swapLast: true },
+  18: { kind: 'benefit', destination: 20 },
+  19: { kind: 'malefit', destination: 13 },
+  24: { kind: 'malefit', skipTurns: 2 },
+  25: { kind: 'benefit', destination: 28 },
+  26: { kind: 'malefit', destination: 20 },
+};
 export function resolveMove(position: number, die: number, correct: boolean) {
-  const predicted = clamp(position + die);
-  const moved = clamp(position + (correct ? die : -die));
-  const penalty = PENALTIES[moved] ?? 0;
-  const final = clamp(moved - penalty);
-  return { predicted, areaIndex: colorIndex(predicted), moved, penalty, final, won: final === 30 };
+  const predicted = position + die > 30 ? position : clamp(position + die);
+  // Erros mantêm a regra anterior: recuar o valor do dado.
+  const moved = correct ? predicted : clamp(position - die);
+  return {
+    predicted,
+    areaIndex: colorIndex(predicted),
+    moved,
+    penalty: 0,
+    final: moved,
+    won: correct && moved === 30,
+  };
 }
 export function determineWinner(
   rolls: (number | null)[],

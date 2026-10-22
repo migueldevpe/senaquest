@@ -16,7 +16,7 @@ export function Crown({
   position: [number, number, number];
   scale?: number;
 }) {
-  const source = useLoader(FBXLoader, '/models/crownwin.fbx');
+  const source = useLoader(FBXLoader, '/models/crownwin/crownwin.fbx');
   // FBX não garante a associação automática dos mapas externos exportados do Blender.
   // Texturas mantidas separadas em WebP para ajustes futuros.
   const [colorMap, normalMap] = useLoader(THREE.TextureLoader, [
@@ -68,7 +68,7 @@ export function Crown({
     </group>
   );
 }
-useLoader.preload(FBXLoader, '/models/crownwin.fbx');
+useLoader.preload(FBXLoader, '/models/crownwin/crownwin.fbx');
 
 // A câmera do jogador é em primeira pessoa: uma coroa ancorada nela
 // invadia a visão e virava um polígono gigante ao olhar para cima.

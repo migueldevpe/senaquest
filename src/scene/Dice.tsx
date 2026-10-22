@@ -419,25 +419,25 @@ function DieBody({
           <Billboard follow>
             <group ref={badgeVisual}>
               {/* Contorno no mesmo formato do balão, sem alterar sua posição no mundo. */}
-              <mesh geometry={RESULT_BUBBLE_OUTLINE} renderOrder={9998} position={[0, 0, 0.001]}>
+              <mesh geometry={RESULT_BUBBLE_OUTLINE} renderOrder={0} position={[0, 0, 0.001]}>
                 <meshBasicMaterial
                   ref={bubbleBorder}
                   color={TOOLTIP.outlineColor}
                   transparent
                   opacity={0}
-                  depthTest={false}
+                  depthTest={true}
                   depthWrite={false}
                   side={THREE.DoubleSide}
                   toneMapped={false}
                 />
               </mesh>
-              <mesh geometry={RESULT_BUBBLE} renderOrder={9999}>
+              <mesh geometry={RESULT_BUBBLE} renderOrder={0}>
                 <meshBasicMaterial
                   ref={bubbleFill}
                   color={TOOLTIP.fillColor}
                   transparent
                   opacity={0}
-                  depthTest={false}
+                  depthTest={true}
                   depthWrite={false}
                   side={THREE.DoubleSide}
                   toneMapped={false}
@@ -445,13 +445,13 @@ function DieBody({
               </mesh>
               <Text
                 font={POPPINS_3D}
-                renderOrder={10000}
+                renderOrder={0}
                 position={[0, 0, 0.012]}
                 fontSize={0.28}
                 color="#ffffff"
                 anchorX="center"
                 anchorY="middle"
-                material-depthTest={false}
+                material-depthTest={true}
                 material-depthWrite={false}
               >
                 {displayedValue}
@@ -479,7 +479,6 @@ function ArenaContents() {
     state.phase === 'lotteryRolling' ? state.lotteryThrower : state.thrower,
   );
   const lottery = phase === 'lotteryRolling';
-  const side = (thrower ?? 0) as ThrowSide;
   // Índices dos jogadores: 0 frente, 1 direita (Claudinha), 2 fundo (Paty), 3 esquerda.
   const gates = [
     useRef<RapierCollider>(null),

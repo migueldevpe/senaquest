@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { COURSES, CourseId, NAMES, QUESTION_BANK, BankQuestion, colorIndex } from './data';
-import { determineWinner, resolveMove, rollDie, turnOrder } from './rules';
+import { determineWinner, resolveMove, turnOrder, SPECIAL_SQUARES } from './rules';
 import { shuffledPositions, shuffleQuestion } from './quizShuffle';
 export type Phase =
   | 'choose'
@@ -18,9 +18,23 @@ export type Phase =
   | 'rollTimeout'
   | 'skipped'
   | 'lotteryRolling';
-type Participant = { position: number; correct: number; wrong: number; skip: boolean };
+type Participant = {
+  position: number;
+  correct: number;
+  wrong: number;
+  skip: boolean;
+  skipTurns: number;
+  immune: boolean;
+};
 const initialPlayers = (): Participant[] =>
-  NAMES.map(() => ({ position: 0, correct: 0, wrong: 0, skip: false }));
+  NAMES.map(() => ({
+    position: 0,
+    correct: 0,
+    wrong: 0,
+    skip: false,
+    skipTurns: 0,
+    immune: false,
+  }));
 
 type State = {
   phase: Phase;
@@ -245,8 +259,10 @@ export const useGame = create<State>((set, get) => ({
     const s = get();
     if (s.phase !== 'turn') return;
     const id = s.order[s.turnIndex];
-    if (s.players[id].skip) {
-      const players = s.players.map((p, i) => (i === id ? { ...p, skip: false } : p));
+    if (s.players[id].skip || s.players[id].skipTurns > 0) {
+      const players = s.players.map((p, i) =>
+        i === id ? { ...p, skip: false, skipTurns: Math.max(0, p.skipTurns - 1) } : p,
+      );
       set({
         phase: 'skipped',
         players,
@@ -265,7 +281,7 @@ export const useGame = create<State>((set, get) => ({
     const s = get();
     if (s.phase !== 'turn' || s.busy || s.rollSeconds <= 0) return;
     const id = s.order[s.turnIndex];
-    if (s.players[id].skip) return;
+    if (s.players[id].skip || s.players[id].skipTurns > 0) return;
     set({
       phase: 'rolling',
       busy: true,
@@ -280,7 +296,8 @@ export const useGame = create<State>((set, get) => ({
     if (s.phase !== 'rolling' || s.die === null) return;
     const id = s.order[s.turnIndex];
     const die = s.die!;
-    const predicted = Math.min(30, s.players[id].position + die);
+    const predicted =
+      s.players[id].position + die > 30 ? s.players[id].position : s.players[id].position + die;
     const area = colorIndex(predicted);
     const remaining = QUESTION_BANK[s.course].filter((q) => !s.usedQuestionIds.includes(q.id));
     const byArea = remaining.filter((q) => q.areaIndex === area);
@@ -411,16 +428,46 @@ export const useGame = create<State>((set, get) => ({
     const id = s.order[s.turnIndex];
     const p = s.players[id];
     const result = resolveMove(p.position, s.die!, s.outcome === 'correct');
-    const players = s.players.map((entry, i) =>
-      i === id ? { ...entry, position: result.final } : entry,
+    const correct = s.outcome === 'correct';
+    // Eventos só ativam ao chegar a uma nova casa por resposta correta.
+    // Se o dado ultrapassar a casa 30, o peão fica parado e não reativa a casa atual.
+    const event =
+      correct && result.moved !== p.position ? SPECIAL_SQUARES[result.moved] : undefined;
+    const immuneBlocked = !!event && event.kind === 'malefit' && p.immune;
+    const target =
+      event && !immuneBlocked && event.destination !== undefined ? event.destination : result.final;
+    let players = s.players.map((entry, i) =>
+      i === id
+        ? {
+            ...entry,
+            position: target,
+            immune: immuneBlocked ? false : event?.immunity ? true : entry.immune,
+            skipTurns:
+              event && !immuneBlocked ? entry.skipTurns + (event.skipTurns ?? 0) : entry.skipTurns,
+          }
+        : { ...entry },
     );
+    let eventMessage = event ? ` Evento: casa ${result.moved}.` : '';
+    if (event?.swapLast && !immuneBlocked) {
+      const minimum = Math.min(...players.map((entry) => entry.position));
+      const last = players
+        .map((entry, i) => ({ i, position: entry.position }))
+        .filter((entry) => entry.position === minimum);
+      if (last.length === 1 && last[0].i !== id) {
+        const other = last[0].i;
+        players[other].position = result.moved;
+        players[id].position = minimum;
+        eventMessage = ` Portal do azar: troca com ${NAMES[other]}.`;
+      } else eventMessage = ' Portal do azar: sem troca por empate ou último lugar.';
+    }
+    if (immuneBlocked) eventMessage = ' Imunidade consumida: malefício anulado.';
     set({
       players,
       phase: 'moving',
       movementFrom: p.position,
-      movementTo: result.final,
+      movementTo: players[id].position,
       winner: result.won ? id : null,
-      message: `${NAMES[id]}: ${p.position} → ${result.moved}${result.penalty ? ` → ${result.final} (penalidade: -${result.penalty})` : ''}.`,
+      message: `${NAMES[id]}: ${p.position} → ${players[id].position}.${eventMessage}`,
     });
   },
   finishMovement: () => {

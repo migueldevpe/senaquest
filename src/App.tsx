@@ -2,7 +2,7 @@ import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SmoothTimer } from './components/SmoothTimer';
 import { World, xrStore, PAWN_COLORS } from './scene/World';
 import { useGame, currentArea, currentPlayer, currentQuestion } from './game/store';
-import { COLORS, COURSES, COURSE_IDS, NAMES } from './game/data';
+import { COURSES, COURSE_IDS, NAMES } from './game/data';
 import './style.css';
 import { playSound, setSoundVolume } from './game/sounds';
 import { setQuizMusicActive, unlockQuizMusic, disposeQuizMusic } from './game/quizMusic';
@@ -227,8 +227,8 @@ function App() {
 
   // Apenas a faixa do questionário foi adicionada nesta etapa.
   useEffect(() => {
-    setQuizMusicActive(game.phase === 'question');
-  }, [game.phase]);
+    setQuizMusicActive(game.phase === 'question' && currentPlayer(game) === 0);
+  }, [game.phase, game.turnIndex, game.order]);
   // Música do menu: seleção e confirmação de curso; sem fade.
   useEffect(() => {
     setMenuMusicActive(game.phase === 'choose' || game.phase === 'confirm');
@@ -468,7 +468,6 @@ function App() {
       }),
     );
   }, [game.phase, time, timerDuration, timerDeadline?.deadline, victoryDeadline]);
-  const showPanel = !['choose', 'confirm'].includes(game.phase);
 
   return (
     <div className="app" onClickCapture={uiClick} onMouseOver={uiHover}>
@@ -673,29 +672,32 @@ function App() {
       <section
         className={`panel ${game.phase === 'question' ? 'quiz-panel' : ''} ${game.phase === 'feedback' ? 'feedback-panel' : ''}`}
       >
-        {time !== null && Number.isFinite(timerDuration) && timerDuration > 0 && (
-          <SmoothTimer
-            timerKey={timerKey}
-            duration={timerDuration}
-            seconds={time}
-            deadline={
-              timerDeadline?.key === timerKey ||
-              (game.phase === 'turn' && timerDeadline?.key === `turn-${game.turnIndex}`) ||
-              (game.phase === 'question' &&
-                timerDeadline?.key ===
-                  `question-${game.turnIndex}-${game.activeQuestion?.id ?? ''}`)
-                ? timerDeadline?.deadline
-                : undefined
-            }
-            caption={
-              game.phase === 'question'
-                ? 'Tempo para responder'
-                : game.phase === 'turn'
-                  ? 'Tempo para lançar'
-                  : 'Avanço automático'
-            }
-          />
-        )}
+        {game.phase !== 'finished' &&
+          time !== null &&
+          Number.isFinite(timerDuration) &&
+          timerDuration > 0 && (
+            <SmoothTimer
+              timerKey={timerKey}
+              duration={timerDuration}
+              seconds={time}
+              deadline={
+                timerDeadline?.key === timerKey ||
+                (game.phase === 'turn' && timerDeadline?.key === `turn-${game.turnIndex}`) ||
+                (game.phase === 'question' &&
+                  timerDeadline?.key ===
+                    `question-${game.turnIndex}-${game.activeQuestion?.id ?? ''}`)
+                  ? timerDeadline?.deadline
+                  : undefined
+              }
+              caption={
+                game.phase === 'question'
+                  ? 'Tempo para responder'
+                  : game.phase === 'turn'
+                    ? 'Tempo para lançar'
+                    : 'Avanço automático'
+              }
+            />
+          )}
         {game.phase === 'choose' && (
           <>
             <h1>Bem-vindo ao SENAQUEST!</h1>

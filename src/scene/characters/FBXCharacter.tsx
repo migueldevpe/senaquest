@@ -1,12 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useFrame, useLoader } from '@react-three/fiber';
+import { useFrame } from '@react-three/fiber';
 import { CharacterName } from '../CharacterName';
-import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 import { useGame } from '../../game/store';
 import { victoryPunchEnvelope, victoryPunchSway } from '../characterAnimation';
-import { PLAYER_COLORS } from '../../game/playerVisual';
 
 import { CHARACTER_CONFIG, type CharacterSettings } from './characterConfig';
 import { Crown, CROWN_TOP_OFFSET } from '../VictoryEffects';
@@ -49,7 +47,10 @@ export function FBXCharacter({
       side: THREE.DoubleSide,
     });
   }, [uvTexture]);
-  const model = useMemo(() => clone(source), [source]);
+  const model = useMemo(
+    () => clone(source as unknown as Parameters<typeof clone>[0]) as unknown as THREE.Group,
+    [source],
+  );
   const rig = useMemo(() => {
     const joints = new Map<string, RigJoint>();
     model.traverse((object) => {
@@ -77,7 +78,9 @@ export function FBXCharacter({
       }
     });
     model.updateMatrixWorld(true);
-    const bounds = new THREE.Box3().setFromObject(model);
+    const bounds = new THREE.Box3().setFromObject(
+      model as unknown as Parameters<THREE.Box3['setFromObject']>[0],
+    );
     const size = bounds.getSize(new THREE.Vector3());
     const center = bounds.getCenter(new THREE.Vector3());
     // Escala do personagem definida pelo jogo, não pelo Blender.
