@@ -419,7 +419,7 @@ function DieBody({
           <Billboard follow>
             <group ref={badgeVisual}>
               {/* Contorno no mesmo formato do balão, sem alterar sua posição no mundo. */}
-              <mesh geometry={RESULT_BUBBLE_OUTLINE} renderOrder={0} position={[0, 0, 0.001]}>
+              <mesh geometry={RESULT_BUBBLE_OUTLINE} renderOrder={9999} position={[0, 0, 0.001]}>
                 <meshBasicMaterial
                   ref={bubbleBorder}
                   color={TOOLTIP.outlineColor}
@@ -431,7 +431,7 @@ function DieBody({
                   toneMapped={false}
                 />
               </mesh>
-              <mesh geometry={RESULT_BUBBLE} renderOrder={0}>
+              <mesh geometry={RESULT_BUBBLE} renderOrder={9999}>
                 <meshBasicMaterial
                   ref={bubbleFill}
                   color={TOOLTIP.fillColor}
@@ -445,7 +445,7 @@ function DieBody({
               </mesh>
               <Text
                 font={POPPINS_3D}
-                renderOrder={0}
+                renderOrder={9999}
                 position={[0, 0, 0.012]}
                 fontSize={0.28}
                 color="#ffffff"
