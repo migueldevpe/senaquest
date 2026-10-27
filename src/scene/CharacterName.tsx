@@ -1,5 +1,6 @@
 import { POPPINS_3D } from './poppins';
-import { Billboard, Text } from '@react-three/drei';
+import { Text } from '@react-three/drei';
+import { YawBillboard } from './YawBillboard';
 
 /** Rótulo compartilhado: sempre voltado para a câmera, inclusive em VR. */
 export function CharacterName({
@@ -12,7 +13,7 @@ export function CharacterName({
   color?: string;
 }) {
   return (
-    <Billboard position={[0, height, 0]} follow>
+    <YawBillboard position={[0, height, 0]}>
       <Text
         font={POPPINS_3D}
         fontSize={0.23}
@@ -24,6 +25,6 @@ export function CharacterName({
       >
         {name}
       </Text>
-    </Billboard>
+    </YawBillboard>
   );
 }

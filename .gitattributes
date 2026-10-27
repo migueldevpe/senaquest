@@ -1,0 +1,17 @@
+# Texto uniforme em LF no Windows, Linux e Vercel.
+* text=auto
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.css text eol=lf
+*.json text eol=lf
+*.html text eol=lf
+*.fbx binary
+*.glb binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.opus binary
+*.mp3 binary

@@ -114,10 +114,11 @@ function HudArtwork({
       return lines.slice(0, 2);
     };
     // Keep Biluteteia's exact scoreboard coordinates and styling.
+    // Painel no centro vertical do HUD, mesma margem direita, mesmo tamanho.
     const x = 1505,
-      y = 676,
       w = 514,
-      h = 445;
+      h = 445,
+      y = (HUD_H - h) / 2;
     rounded(x, y, w, h, 22);
     ctx.fillStyle = '#ff981a';
     ctx.fill();
@@ -238,17 +239,19 @@ function VisorHUD({
       if (bounds.length) {
         const horizontal = Math.min(...bounds.map((b) => b[0]));
         const vertical = Math.min(...bounds.map((b) => b[1]));
-        // The score panel occupies only the lower-right region of the artwork.
-        // Align that region, not the empty canvas, with the safe visible margins.
+        // Preserve the artwork, horizontal right alignment and readable margins.
+        // Center the actual classification panel, NOT the whole transparent canvas,
+        // vertically on the Quest HUD regardless of headset FOV.
         const safeRight = HUD_DISTANCE * Math.tan(horizontal / 2) * 0.88;
-        const safeBottom = -HUD_DISTANCE * Math.tan(vertical / 2) * 0.85;
+        const safeHalfHeight = HUD_DISTANCE * Math.tan(vertical / 2) * 0.83;
         const rightEdge = (2019 / HUD_W - 0.5) * HUD_PLANE_W;
-        const bottomEdge = (0.5 - 1121 / HUD_H) * HUD_PLANE_H;
-        const fit = Math.min(1, safeRight / rightEdge, safeBottom / bottomEdge);
+        const panelCenterY = 0; // o desenho já está centralizado no canvas
+        const panelHalfHeight = (445 / (2 * HUD_H)) * HUD_PLANE_H;
+        const fit = Math.min(1, safeRight / rightEdge, safeHalfHeight / panelHalfHeight);
         adaptiveScale.current = THREE.MathUtils.clamp(fit, 0.58, 1);
         hudInset.current.set(
           safeRight - rightEdge * adaptiveScale.current,
-          safeBottom - bottomEdge * adaptiveScale.current,
+          -panelCenterY * adaptiveScale.current,
         );
       }
     }

@@ -16,12 +16,12 @@ export function Crown({
   position: [number, number, number];
   scale?: number;
 }) {
-  const source = useLoader(FBXLoader, '/models/crownwin/crownwin.fbx');
+  const source = useLoader(FBXLoader, '/models/crownwin.fbx');
   // FBX não garante a associação automática dos mapas externos exportados do Blender.
   // Texturas mantidas separadas em WebP para ajustes futuros.
   const [colorMap, normalMap] = useLoader(THREE.TextureLoader, [
-    '/models/crownwin/crown-texture_crown.webp',
-    '/models/crownwin/crown-normal_map.webp',
+    '/models/crown-texture_crown.webp',
+    '/models/crown-normal_map.webp',
   ]);
   const crownMaterial = useMemo(() => {
     colorMap.colorSpace = THREE.SRGBColorSpace;
@@ -68,7 +68,7 @@ export function Crown({
     </group>
   );
 }
-useLoader.preload(FBXLoader, '/models/crownwin/crownwin.fbx');
+useLoader.preload(FBXLoader, '/models/crownwin.fbx');
 
 // A câmera do jogador é em primeira pessoa: uma coroa ancorada nela
 // invadia a visão e virava um polígono gigante ao olhar para cima.

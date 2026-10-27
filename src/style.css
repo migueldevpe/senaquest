@@ -328,7 +328,7 @@ button:focus-visible {
 .answer-explanation p {
   margin-bottom: 0;
 }
-footer {
+.app > footer {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -851,7 +851,7 @@ footer {
   right: var(--ui-edge);
   max-width: min(320px, calc(100vw - 2 * var(--ui-edge)));
 }
-.app footer {
+.app > footer {
   bottom: 0;
   left: 0;
   right: 0;
@@ -959,4 +959,395 @@ footer {
   border-radius: inherit;
   background: #ff981a;
   transition: width 0.25s linear;
+}
+/* Exibido somente quando o navegador proíbe autoplay com som. */
+.audio-unlock {
+  position: fixed;
+  z-index: 650;
+  top: 5.1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: min(94vw, 34rem);
+  font-size: 0.8rem;
+  padding: 0.7rem 1rem;
+  box-shadow: 0 10px 28px #001b3299;
+}
+
+/* ===== INICIALIZAÇÃO — TELA DE CARREGAMENTO ===== */
+.startup {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: radial-gradient(ellipse at 50% 10%, #253c5c 0, #101c30 72%);
+  color: #e9f1ff;
+  font-family: Poppins, sans-serif;
+}
+.startup-card {
+  width: min(100%, 460px);
+  text-align: center;
+  padding: 2rem 1.4rem;
+  border: 1px solid #526784;
+  border-radius: 18px;
+  background: #192f4a;
+  box-shadow: 0 20px 65px #050f2388;
+}
+.startup h1 {
+  letter-spacing: 0.075em;
+  font-size: clamp(2rem, 8vw, 3rem);
+  margin: 0;
+  font-weight: 800;
+  color: #e8effb;
+}
+.startup h1 span {
+  color: #f2b84e;
+}
+.startup-card > p:first-of-type {
+  color: #a6bad0;
+  font-size: 0.78rem;
+  letter-spacing: 0.16em;
+  margin-top: -0.25rem;
+  margin-bottom: 2.4rem;
+}
+.startup-progress-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  font-size: 0.85rem;
+  margin-bottom: 0.55rem;
+  text-align: left;
+}
+.startup-progress-row output {
+  color: #f2b84e;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.startup-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 8px;
+  background: #425875;
+  overflow: hidden;
+}
+.startup-fill {
+  height: 100%;
+  background: #f2b84e;
+  border-radius: 8px;
+  transition: width 0.16s ease;
+}
+.startup small {
+  display: block;
+  color: #c6d5e7;
+  margin-top: 1rem;
+  overflow-wrap: anywhere;
+}
+.startup-note {
+  color: #93abc5;
+  font-size: 0.76rem;
+}
+.startup-error {
+  border-top: 1px solid #53657b;
+  padding-top: 0.6rem;
+}
+.startup-error p {
+  overflow-wrap: anywhere;
+  color: #f5b9b1;
+}
+.startup-error button {
+  background: #f2b84e;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 700;
+  color: #13233a;
+  padding: 0.7rem 1.1rem;
+  cursor: pointer;
+}
+/* O Canvas e o HUD montam ATRÁS desta camada. Só revelamos depois de
+   a sala 3D terminar os primeiros quadros; sem flash azul intermediário. */
+.startup {
+  opacity: 1;
+  transition: opacity 0.55s ease-in-out;
+}
+.startup--fading {
+  opacity: 0;
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .startup {
+    transition-duration: 0.01s;
+  }
+}
+
+/* ===== TUTORIAL DESKTOP ===== */
+.sena-tutorial-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 15000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  /* Bloqueia cliques no mundo sem esconder ou desfocar a cena. */
+  background: transparent;
+  pointer-events: auto;
+}
+.sena-tutorial-dialog {
+  width: min(760px, 100%);
+  max-height: min(94vh, 760px);
+  min-height: 460px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  border-radius: var(--ui-modal-radius, 1rem);
+  border: 2px solid #ff981a;
+  background: #103f69;
+  color: #fff;
+  padding: clamp(20px, 4vw, 36px);
+  box-shadow: 0 26px 95px rgba(0, 0, 0, 0.42);
+  font-family: Poppins, sans-serif;
+}
+.sena-tutorial-header,
+.sena-tutorial-footer,
+.sena-tutorial-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.sena-tutorial-eyebrow {
+  font-weight: 700;
+  font-size: 0.86rem;
+  color: #ffb05a;
+  letter-spacing: 0.04em;
+}
+.sena-tutorial-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #c4d8e8;
+  white-space: nowrap;
+}
+.sena-tutorial-progress {
+  display: flex;
+  gap: 7px;
+}
+.sena-tutorial-progress span {
+  flex: 1;
+  height: 6px;
+  background: #376487;
+  border-radius: 10px;
+}
+.sena-tutorial-progress span.is-active {
+  background: #ff981a;
+}
+.sena-tutorial-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  min-height: 280px;
+}
+.sena-tutorial-symbol {
+  align-self: flex-start;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  background: #235c82;
+  border-radius: var(--ui-inner-radius, 0.5rem);
+  font-size: 30px;
+  font-weight: 800;
+  color: #ffb05a;
+}
+.sena-tutorial-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sena-tutorial-copy h2 {
+  margin: 0;
+  font-size: clamp(1.45rem, 4vw, 2.1rem);
+  color: #ffb05a;
+  line-height: 1.2;
+}
+.sena-tutorial-copy p {
+  margin: 0;
+  line-height: 1.65;
+}
+.sena-tutorial-lead {
+  font-weight: 700;
+  font-size: 1.06rem;
+}
+.sena-tutorial-detail {
+  color: #d8e8f3;
+  font-size: 0.96rem;
+}
+.sena-tutorial-event-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.sena-tutorial-event-tags span {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.83rem;
+  font-weight: 700;
+}
+.sena-tutorial-event-tags .benefit {
+  background: #176c57;
+}
+.sena-tutorial-event-tags .penalty {
+  background: #953a43;
+}
+.sena-tutorial-example {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.sena-tutorial-example > div {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: #235a7d;
+  border-radius: 8px;
+}
+.sena-tutorial-example .green {
+  color: #8aefd0;
+}
+.sena-tutorial-example .orange {
+  color: #ffb05a;
+}
+.sena-tutorial-dialog > .sena-tutorial-footer {
+  /* Protege o footer do tutorial do rodapé global da aplicação. */
+  position: static;
+  inset: auto;
+  width: 100%;
+  margin-top: auto;
+  padding: 18px 0 0;
+  border-top: 1px solid #3a6a8b;
+  background: none;
+  text-align: left;
+  color: inherit;
+  font-size: inherit;
+  pointer-events: auto;
+  flex-shrink: 0;
+}
+.sena-tutorial-nav {
+  margin-left: auto;
+}
+.sena-tutorial-dialog button {
+  position: relative;
+  pointer-events: auto;
+  padding: 12px 20px;
+  min-width: 110px;
+}
+.sena-tutorial-secondary {
+  background: #286c9d;
+  color: #fff;
+}
+.sena-tutorial-primary {
+  background: #ff981a;
+  color: #0e2942;
+}
+@media (max-width: 560px) {
+  .sena-tutorial-backdrop {
+    padding: 10px;
+  }
+  .sena-tutorial-dialog {
+    gap: 14px;
+    padding: 20px;
+  }
+  .sena-tutorial-content {
+    min-height: auto;
+  }
+  .sena-tutorial-dialog {
+    min-height: auto;
+  }
+  .sena-tutorial-dialog > .sena-tutorial-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .sena-tutorial-nav {
+    margin-left: 0;
+  }
+  .sena-tutorial-footer button,
+  .sena-tutorial-nav {
+    flex: 1;
+  }
+  .sena-tutorial-example {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Diagramas estáticos e educativos no Desktop. Sem animações de mão ou GIF. */
+.sena-tutorial-rule-visual {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 15px;
+  border: 1px solid #376c8f;
+  border-radius: var(--ui-inner-radius, 10px);
+  background: #174a6d;
+  align-items: stretch;
+}
+.sena-tutorial-rule-visual small {
+  flex-basis: 100%;
+  color: #d5e5f3;
+  font-size: 0.77rem;
+  line-height: 1.5;
+}
+.sena-tutorial-lottery > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  flex: 1 1 125px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #286286;
+  color: #fff;
+  font-size: 0.83rem;
+}
+.sena-tutorial-lottery > div span {
+  color: #ffb05a;
+  font-weight: 800;
+}
+.sena-tutorial-movement > div {
+  display: grid;
+  flex: 1 1 46px;
+  min-height: 67px;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid #5b89a6;
+  background: #286286;
+  font-weight: 800;
+}
+.sena-tutorial-movement > div.is-current {
+  background: #ff981a;
+  color: #102d44;
+  border-color: #ffd495;
+}
+.sena-tutorial-victory {
+  justify-content: center;
+  align-items: center;
+}
+.sena-tutorial-victory > strong {
+  padding: 12px 26px;
+  border-radius: 9px;
+  background: #286286;
+  font-size: 1.5rem;
+}
+.sena-tutorial-victory > strong.is-winner {
+  background: #ff981a;
+  color: #102d44;
+}
+.sena-tutorial-victory > span {
+  color: #ffb05a;
+  font-size: 1.6rem;
+}
+.sena-tutorial-victory small {
+  text-align: center;
 }

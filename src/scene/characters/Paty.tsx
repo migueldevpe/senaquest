@@ -6,8 +6,8 @@ import { FBXCharacter } from './FBXCharacter';
 import { CHARACTER_CONFIG } from './characterConfig';
 
 export function FBXPaty(props: { position: [number, number, number]; rotation: number }) {
-  const source = useLoader(FBXLoader, '/models/paty/paty.fbx');
-  const texture = useLoader(THREE.TextureLoader, '/models/paty/paty-uv.webp');
+  const source = useLoader(FBXLoader, '/models/paty.fbx');
+  const texture = useLoader(THREE.TextureLoader, '/models/paty-uv.webp');
   return (
     <FBXCharacter
       {...props}
@@ -20,5 +20,5 @@ export function FBXPaty(props: { position: [number, number, number]; rotation: n
     />
   );
 }
-useLoader.preload(FBXLoader, '/models/paty/paty.fbx');
-useLoader.preload(THREE.TextureLoader, '/models/paty/paty-uv.webp');
+useLoader.preload(FBXLoader, '/models/paty.fbx');
+useLoader.preload(THREE.TextureLoader, '/models/paty-uv.webp');

@@ -4,6 +4,26 @@ import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
 import { XR, XROrigin, createXRStore } from '@react-three/xr';
 import { VRInterface } from './VRInterface';
+import { XRTutorial, XRSessionTutorialTrigger } from './XRTutorial';
+import { XRMusicUnlock } from './XRMusicUnlock';
+import { VRRollDebugPanel } from './VRRollDebugPanel';
+import { HealthSectorModels } from './HealthSectorModels';
+import { MedicalDeskModels } from './MedicalDeskModels';
+import { LogisticsShelfModel } from './LogisticsShelfModel';
+import {
+  ROOM_INNER_FACE,
+  ROOM_WALL,
+  wallPanelDistance,
+  FLOOR_Y,
+  BASEBOARD_HEIGHT,
+  BASEBOARD_CENTER_Y,
+} from './roomWallPlacement';
+import { MODEL_PLACEMENTS } from './modelPlacements';
+import { CeilingLightFixtures } from './CeilingLightFixtures';
+import { TechnologyExhibits } from './technology';
+// SENAQUEST_TEMP_DECOR_IMPORT_BEGIN
+import { AdministrationWallDecor, SectorShelfDecor } from './SectorDecor';
+// SENAQUEST_TEMP_DECOR_IMPORT_END
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { COLORS, NAMES, colorIndex } from '../game/data';
@@ -111,7 +131,7 @@ export const boardPosition = boardGridPosition;
 function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => void }) {
   const [x, , z] = boardPosition(n);
   const color = n === 30 ? '#16a58b' : COLORS[colorIndex(n)];
-  const isEvent = n % 5 === 0;
+  const isEvent = BENEFIT_HOUSES.has(n) || PENALTY_HOUSES.has(n);
   return (
     <group position={[x, BOARD_VISUAL.tileHeight, z]}>
       <RoundedBox
@@ -200,7 +220,7 @@ function JourneyPawn({
   index: number;
   materials: React.RefObject<THREE.MeshStandardMaterial[]>;
 }) {
-  const source = useLoader(FBXLoader, '/models/pawn/pawn.fbx');
+  const source = useLoader(FBXLoader, '/models/pawn.fbx');
   const model = useMemo(() => {
     const instance = source.clone(true);
     // Normaliza a altura e apoia a base no chão, independentemente das unidades do FBX.
@@ -341,7 +361,7 @@ function Board() {
   const onTextReady = useCallback((key: string) => {
     if (readyTexts.current.has(key)) return;
     readyTexts.current.add(key);
-    if (readyTexts.current.size === 38) setTextsReady(true);
+    if (readyTexts.current.size >= 41) setTextsReady(true);
   }, []);
   const revealed = !['choose', 'confirm', 'intro'].includes(phase);
   const canReveal = revealed && textsReady;
@@ -545,8 +565,8 @@ function TestFBXChair({
   player?: boolean;
 }) {
   const config = player ? PLAYER_CHAIR : TEST_CHAIR;
-  const source = useLoader(FBXLoader, '/models/main_chair/main_chair.fbx');
-  const chairTexture = useLoader(THREE.TextureLoader, '/models/main_chair/main_chair-color.webp');
+  const source = useLoader(FBXLoader, '/models/main_chair.fbx');
+  const chairTexture = useLoader(THREE.TextureLoader, '/models/main_chair-color.webp');
   chairTexture.colorSpace = THREE.SRGBColorSpace;
   chairTexture.flipY = true;
   const { model, scale, centerX, minY, centerZ } = useMemo(() => {
@@ -608,14 +628,26 @@ function TestFBXChair({
   );
 }
 // Personagem sentado no eixo +Z. As articulações ficam em grupos separados para futura troca por GLB rigado.
+// SENAQUEST_TEMP_DECOR_FLAG_BEGIN
+// 'off' deixa as estantes vazias, 'legacy' mostra as antigas caixas simples.
+// Tudo deste recurso temporário pode ser removido com um único comando.
+const TEMP_SECTOR_DECOR_MODE = (() => {
+  if (typeof window === 'undefined') return 'placeholders';
+  const decor = new URLSearchParams(window.location.search).get('decor');
+  return decor === 'off' || decor === 'legacy' ? decor : 'placeholders';
+})();
+// SENAQUEST_TEMP_DECOR_FLAG_END
+
 function Shelf({
   position,
   rotation = 0,
   boxes = false,
+  sector,
 }: {
   position: [number, number, number];
   rotation?: number;
   boxes?: boolean;
+  sector?: 'technology' | 'logistics' | 'health';
 }) {
   return (
     <group position={position} rotation={[0, rotation, 0]}>
@@ -633,18 +665,24 @@ function Shelf({
           </mesh>
         </mesh>
       ))}
-      {Array.from({ length: 9 }, (_, i) => (
-        <mesh key={i} position={[-0.78 + (i % 3) * 0.77, -0.76 + Math.floor(i / 3) * 0.75, 0.03]}>
-          <boxGeometry args={[boxes ? 0.51 : 0.15, boxes ? 0.42 : 0.42, 0.31]} />
-          <meshStandardMaterial
-            color={
-              boxes
-                ? ['#c69c6d', '#b88754', '#d4b082'][i % 3]
-                : ['#318fba', '#de9c51', '#5e9f8e'][i % 3]
-            }
-          />
-        </mesh>
-      ))}
+      {/* SENAQUEST_TEMP_DECOR_SHELF_BEGIN */}
+      {sector && TEMP_SECTOR_DECOR_MODE === 'placeholders' ? (
+        <SectorShelfDecor sector={sector} />
+      ) : TEMP_SECTOR_DECOR_MODE === 'legacy' ? (
+        Array.from({ length: 9 }, (_, i) => (
+          <mesh key={i} position={[-0.78 + (i % 3) * 0.77, -0.76 + Math.floor(i / 3) * 0.75, 0.03]}>
+            <boxGeometry args={[boxes ? 0.51 : 0.15, 0.42, 0.31]} />
+            <meshStandardMaterial
+              color={
+                boxes
+                  ? ['#c69c6d', '#b88754', '#d4b082'][i % 3]
+                  : ['#318fba', '#de9c51', '#5e9f8e'][i % 3]
+              }
+            />
+          </mesh>
+        ))
+      ) : null}
+      {/* SENAQUEST_TEMP_DECOR_SHELF_END */}
     </group>
   );
 }
@@ -694,108 +732,79 @@ function WallPanel({
     </group>
   );
 }
-function Computer({
-  position,
-  rotation = 0,
-}: {
-  position: [number, number, number];
-  rotation?: number;
-}) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      <mesh position={[0, 0.55, 0]}>
-        <boxGeometry args={[0.95, 0.62, 0.09]} />
-        <meshStandardMaterial color="#24344b" />
-      </mesh>
-      <mesh position={[0, 0.55, 0.055]}>
-        <planeGeometry args={[0.82, 0.49]} />
-        <meshBasicMaterial color="#126f83" />
-      </mesh>
-      <mesh position={[0, 0.13, 0]}>
-        <boxGeometry args={[0.07, 0.27, 0.08]} />
-        <meshStandardMaterial color="#667b8d" />
-      </mesh>
-      <mesh position={[0, 0, 0]}>
-        <boxGeometry args={[0.48, 0.05, 0.3]} />
-        <meshStandardMaterial color="#667b8d" />
-      </mesh>
-    </group>
-  );
-}
-function NetworkRack({ position }: { position: [number, number, number] }) {
-  return (
-    <group position={position}>
-      <mesh position={[0, 1, 0]}>
-        <boxGeometry args={[1, 2, 0.62]} />
-        <meshStandardMaterial color="#1b2c42" />
-      </mesh>
-      {Array.from({ length: 8 }, (_, i) => (
-        <group key={i} position={[0, 0.27 + i * 0.21, 0.33]}>
-          <mesh>
-            <boxGeometry args={[0.8, 0.14, 0.04]} />
-            <meshStandardMaterial color="#405b71" />
-          </mesh>
-          <mesh position={[0.26, 0, 0.03]}>
-            <sphereGeometry args={[0.035, 8, 8]} />
-            <meshBasicMaterial color={i % 2 ? '#F7941D' : '#3cdb8e'} />
-          </mesh>
-        </group>
-      ))}
-    </group>
-  );
-}
 function WallDecor() {
+  // Placas de 10 cm: costas 5 mm à frente da face interna da parede.
+  const panelDistance = wallPanelDistance(0.1);
   return (
     <>
       {/* Quatro painéis alinhados às paredes; sem placas sobrepostas. */}
       <WallPanel
-        position={[0, 3.35, -7.8]}
+        position={[0, 3.35, -panelDistance]}
         title="TECNOLOGIA DA INFORMAÇÃO"
         subtitle="Programação • Redes • Suporte"
         color="#1b5c87"
       />
       <WallPanel
-        position={[0, 3.35, 7.8]}
+        position={[0, 3.35, panelDistance]}
         rotation={Math.PI}
         title="SAÚDE ADMINISTRATIVA"
         subtitle="Atendimento • Agendamento"
         color="#238779"
       />
       <WallPanel
-        position={[-7.8, 3.35, 0]}
+        position={[-panelDistance, 3.35, 0]}
         rotation={Math.PI / 2}
         title="ADMINISTRAÇÃO"
         subtitle="Gestão • RH • Finanças"
         color="#8559a0"
       />
       <WallPanel
-        position={[7.8, 3.35, 0]}
+        position={[panelDistance, 3.35, 0]}
         rotation={-Math.PI / 2}
         title="LOGÍSTICA E VENDAS"
         subtitle="Estoque • Transporte • Comércio"
         color="#bb7136"
       />
-      <Shelf position={[-4.5, 1.3, -7.15]} />
-      <Shelf position={[4.5, 1.3, 7.15]} rotation={Math.PI} boxes />
-      <Shelf position={[7.12, 1.3, 4.5]} rotation={-Math.PI / 2} boxes />
-      <NetworkRack position={[5.9, 0.12, -7.15]} />
-      <mesh position={[0, 1.32, -7.3]}>
+      <Shelf
+        position={MODEL_PLACEMENTS.health_shelf.position}
+        rotation={MODEL_PLACEMENTS.health_shelf.rotationY}
+        boxes
+        sector="health"
+      />
+      <TechnologyExhibits />
+      {/* Modelos fornecidos pelo usuário: permanentes e independentes dos placeholders. */}
+      <HealthSectorModels />
+      <MedicalDeskModels />
+      <TestFBXChair
+        position={MODEL_PLACEMENTS.cadeira_mesa_saude.position}
+        rotation={MODEL_PLACEMENTS.cadeira_mesa_saude.rotationY}
+      />
+      {/* Estante definitiva de Logística e Vendas — substitui a estante antiga
+          e seus placeholders; configuração em modelPlacements.ts. */}
+      <LogisticsShelfModel />
+      {/* SENAQUEST_TEMP_DECOR_WALL_BEGIN */}
+      {TEMP_SECTOR_DECOR_MODE === 'placeholders' && <AdministrationWallDecor />}
+      {/* SENAQUEST_TEMP_DECOR_WALL_END */}
+      <mesh position={[0, 1.32, -ROOM_INNER_FACE + 0.4 + ROOM_WALL.clearance]}>
         <boxGeometry args={[4.8, 0.13, 0.8]} />
         <meshStandardMaterial color="#8295a4" />
       </mesh>
-      {[-1.5, 0, 1.5].map((x) => (
-        <Computer key={x} position={[x, 1.45, -7.15]} />
-      ))}
     </>
   );
 }
 const DESKTOP_CAMERA_HEIGHT_BONUS = 0.2;
-const VR_CAMERA_HEIGHT_BONUS = 0.5;
-const VR_TARGET_INITIAL_EYE_HEIGHT = 1.8;
+const VR_CAMERA_HEIGHT_BONUS = 0.6;
+const VR_TARGET_INITIAL_EYE_HEIGHT = 1.9;
 const VR_MAX_CALIBRATION_ADJUSTMENT = 0.2;
 
 // Calibra apenas uma vez por sessão, mantendo os movimentos reais da cabeça.
-function CalibratedXROrigin() {
+function CalibratedXROrigin({
+  rollDegrees = 0,
+  onRollProbe,
+}: {
+  rollDegrees?: number;
+  onRollProbe?: (status: string) => void;
+}) {
   const { gl } = useThree();
   const origin = useRef<THREE.Group>(null);
   const frames = useRef(0);
@@ -830,12 +839,12 @@ function CalibratedXROrigin() {
   });
   return (
     <group ref={origin} position={[0, VR_CAMERA_HEIGHT_BONUS, 0]}>
-      <VRPinchCameraRig />
+      <VRPinchCameraRig rollDegrees={rollDegrees} onRollProbe={onRollProbe} />
     </group>
   );
 }
 
-function FixedSeatCamera() {
+function FixedSeatCamera({ rollDegrees = 0 }: { rollDegrees?: number }) {
   const { camera, gl } = useThree();
   const yaw = useRef(0),
     pitch = useRef(-0.28),
@@ -885,7 +894,7 @@ function FixedSeatCamera() {
     if (gl.xr.isPresenting) return;
     camera.position.set(0, 1.91 + DESKTOP_CAMERA_HEIGHT_BONUS, 3.32);
     camera.rotation.order = 'YXZ';
-    camera.rotation.set(pitch.current, yaw.current, 0);
+    camera.rotation.set(pitch.current, yaw.current, THREE.MathUtils.degToRad(rollDegrees));
     // Amortecimento exponencial independente de FPS; atualiza a projeção só quando necessário.
     const smoothing = 1 - Math.exp(-9 * Math.min(delta, 0.1));
     smoothZoom.current += (targetZoom.current - smoothZoom.current) * smoothing;
@@ -956,9 +965,7 @@ function StableRoomLighting() {
     const lights: THREE.Light[] = [];
     scene.traverse((object) => {
       // `isLight` tambem identifica objetos de outra copia de Three.js.
-      if ((object as unknown as THREE.Light).isLight) {
-        lights.push(object as unknown as THREE.Light);
-      }
+      if ((object as unknown as THREE.Light).isLight) lights.push(object as unknown as THREE.Light);
     });
     const rogue = lights.filter((light) => !STABLE_LIGHT_NAMES.has(light.name));
     // So ha 3 luzes autorizadas em todo o projeto. Luzes extras sao
@@ -1040,51 +1047,43 @@ function Classroom() {
       <color attach="background" args={['#e4e8e7']} />
       {/* Luzes transferidas para StableRoomLighting, FORA do XR.
           Não renderizar uma segunda fonte de luz dentro de Classroom. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, FLOOR_Y, 0]} receiveShadow>
         <planeGeometry args={[16, 16]} />
         <meshStandardMaterial color="#d8e0dd" />
       </mesh>
-      <mesh name="room-wall-back" position={[0, 2.6, -8]}>
-        <boxGeometry args={[16, 5.2, 0.18]} />
+      <mesh name="room-wall-back" position={[0, 2.6, -ROOM_WALL.halfExtent]}>
+        <boxGeometry args={[16, 5.2, ROOM_WALL.thickness]} />
         <meshStandardMaterial color="#e6edf0" />
       </mesh>
-      <mesh name="room-wall-front" position={[0, 2.6, 8]}>
-        <boxGeometry args={[16, 5.2, 0.18]} />
+      <mesh name="room-wall-front" position={[0, 2.6, ROOM_WALL.halfExtent]}>
+        <boxGeometry args={[16, 5.2, ROOM_WALL.thickness]} />
         <meshStandardMaterial color="#e6edf0" />
       </mesh>
-      <mesh name="room-wall-left" position={[-8, 2.6, 0]}>
-        <boxGeometry args={[0.18, 5.2, 16]} />
+      <mesh name="room-wall-left" position={[-ROOM_WALL.halfExtent, 2.6, 0]}>
+        <boxGeometry args={[ROOM_WALL.thickness, 5.2, 16]} />
         <meshStandardMaterial color="#f0eae0" />
       </mesh>
-      <mesh name="room-wall-right" position={[8, 2.6, 0]}>
-        <boxGeometry args={[0.18, 5.2, 16]} />
+      <mesh name="room-wall-right" position={[ROOM_WALL.halfExtent, 2.6, 0]}>
+        <boxGeometry args={[ROOM_WALL.thickness, 5.2, 16]} />
         <meshStandardMaterial color="#f0eae0" />
       </mesh>
       <mesh position={[0, 5.23, 0]}>
         <boxGeometry args={[16, 0.15, 16]} />
         <meshStandardMaterial color="#f6f5ef" />
       </mesh>
-      {[
-        [-4, -4],
-        [4, -4],
-        [-4, 4],
-        [4, 4],
-      ].map(([x, z], i) => (
-        <mesh key={i} position={[x, 5.09, z]}>
-          <boxGeometry args={[1.6, 0.04, 0.5]} />
-          <meshBasicMaterial color="#fff5db" />
-        </mesh>
-      ))}
+      {/* GLB retangular definitivo + feixe triangular desvanecendo para baixo.
+          Nenhuma fonte de luz adicional: preserve StableRoomLighting. */}
+      <CeilingLightFixtures />
       {/* Rodapés finos, embutidos no perímetro, sem placas novas. */}
       {[-7.88, 7.88].map((z) => (
-        <mesh key={z} position={[0, 0.095, z]}>
-          <boxGeometry args={[15.8, 0.18, 0.065]} />
+        <mesh key={z} position={[0, BASEBOARD_CENTER_Y, z]}>
+          <boxGeometry args={[15.8, BASEBOARD_HEIGHT, 0.065]} />
           <meshStandardMaterial color="#a3b1b7" roughness={0.85} />
         </mesh>
       ))}
       {[-7.88, 7.88].map((x) => (
-        <mesh key={x} position={[x, 0.095, 0]}>
-          <boxGeometry args={[0.065, 0.18, 15.8]} />
+        <mesh key={x} position={[x, BASEBOARD_CENTER_Y, 0]}>
+          <boxGeometry args={[0.065, BASEBOARD_HEIGHT, 15.8]} />
           <meshStandardMaterial color="#a3b1b7" roughness={0.85} />
         </mesh>
       ))}
@@ -1112,7 +1111,13 @@ const VR_ZOOM_DISTANCE = VR_ZOOM_REFERENCE_DISTANCE * (1 - 1 / VR_ZOOM_FACTOR);
 const HAND_PINCH_START = 0.035;
 const HAND_PINCH_END = 0.05;
 
-function VRPinchCameraRig() {
+function VRPinchCameraRig({
+  rollDegrees = 0,
+  onRollProbe,
+}: {
+  rollDegrees?: number;
+  onRollProbe?: (status: string) => void;
+}) {
   const rig = useRef<THREE.Group>(null);
   const { gl, scene } = useThree();
   const amount = useRef(0);
@@ -1268,9 +1273,105 @@ function VRPinchCameraRig() {
   });
   return (
     <group ref={rig}>
-      <XROrigin position={[0, 0.28, 3.32]} />
+      {onRollProbe ? (
+        <XRHeadRollTestPivot degrees={rollDegrees} onProbe={onRollProbe}>
+          <XROrigin position={[0, 0.28, 3.32]} />
+        </XRHeadRollTestPivot>
+      ) : (
+        <XROrigin position={[0, 0.28, 3.32]} />
+      )}
     </group>
   );
+}
+
+/**
+ * Apenas teste de desenvolvimento. A rotação acontece no eixo óptico do
+ * headset e usa como pivô a posição atual dos olhos, sem teletransportá-los.
+ * Calculamos sempre a partir do rig sem roll para evitar acumulação de ângulos.
+ * Não altera as câmeras nem os controles quando degrees=0.
+ */
+function XRHeadRollTestPivot({
+  degrees,
+  onProbe,
+  children,
+}: {
+  degrees: number;
+  onProbe?: (status: string) => void;
+  children: React.ReactNode;
+}) {
+  const pivot = useRef<THREE.Group>(null);
+  const { gl } = useThree();
+  const eyeWorld = useRef(new THREE.Vector3());
+  const eyeInParent = useRef(new THREE.Vector3());
+  const rotatedEye = useRef(new THREE.Vector3());
+  const eyeQuat = useRef(new THREE.Quaternion());
+  const parentQuat = useRef(new THREE.Quaternion());
+  const invertedEyeQuat = useRef(new THREE.Quaternion());
+  const rollQuat = useRef(new THREE.Quaternion());
+  const worldRotation = useRef(new THREE.Quaternion());
+  const zAxis = useRef(new THREE.Vector3(0, 0, 1));
+  const actualQuat = useRef(new THREE.Quaternion());
+  const actualEye = useRef(new THREE.Vector3());
+  const lastReport = useRef('');
+  const framesSinceReport = useRef(0);
+
+  useFrame(() => {
+    const group = pivot.current;
+    if (!group) return;
+    group.position.set(0, 0, 0);
+    group.quaternion.identity();
+    group.updateWorldMatrix(true, true);
+    if (!gl.xr.isPresenting || degrees === 0 || !group.parent) {
+      const message = gl.xr.isPresenting
+        ? 'XR ativo · posição neutra (0°)'
+        : 'Desktop · rotação da câmera ativa';
+      if (onProbe && lastReport.current !== message) {
+        lastReport.current = message;
+        onProbe(message);
+      }
+      return;
+    }
+    const headset = gl.xr.getCamera();
+    headset.updateWorldMatrix(true, false);
+    headset.getWorldPosition(eyeWorld.current);
+    headset.getWorldQuaternion(eyeQuat.current);
+    group.parent.updateWorldMatrix(true, false);
+    eyeInParent.current.copy(eyeWorld.current);
+    group.parent.worldToLocal(eyeInParent.current);
+    group.parent.getWorldQuaternion(parentQuat.current);
+    rollQuat.current.setFromAxisAngle(zAxis.current, THREE.MathUtils.degToRad(degrees));
+    // Rotação global no eixo frontal do próprio headset; converte ao espaço do pai.
+    worldRotation.current
+      .copy(eyeQuat.current)
+      .multiply(rollQuat.current)
+      .multiply(invertedEyeQuat.current.copy(eyeQuat.current).invert());
+    group.quaternion
+      .copy(parentQuat.current)
+      .invert()
+      .multiply(worldRotation.current)
+      .multiply(parentQuat.current);
+    // Posição do olho invariável durante o roll.
+    rotatedEye.current.copy(eyeInParent.current).applyQuaternion(group.quaternion);
+    group.position.copy(eyeInParent.current).sub(rotatedEye.current);
+    group.updateWorldMatrix(true, true);
+    // Confirma se o objeto de câmera XR realmente recebeu a rotação.
+    // A extensão pode sobrescrever a pose em renderizações futuras: validar visualmente.
+    if (onProbe && ++framesSinceReport.current % 30 === 0) {
+      headset.getWorldQuaternion(actualQuat.current);
+      headset.getWorldPosition(actualEye.current);
+      const measuredDegrees = THREE.MathUtils.radToDeg(eyeQuat.current.angleTo(actualQuat.current));
+      const drift = eyeWorld.current.distanceTo(actualEye.current);
+      const works = Math.abs(measuredDegrees - Math.abs(degrees)) < 2 && drift < 0.015;
+      const message = works
+        ? `XR: inclinação aplicada (${Math.round(measuredDegrees)}°; deslocamento ${Math.round(drift * 1000)} mm)`
+        : `ATENÇÃO: pose XR não acompanhou o teste (${Math.round(measuredDegrees)}°; deslocamento ${Math.round(drift * 1000)} mm)`;
+      if (message !== lastReport.current) {
+        lastReport.current = message;
+        onProbe(message);
+      }
+    }
+  }, -1);
+  return <group ref={pivot}>{children}</group>;
 }
 
 /**
@@ -1359,12 +1460,78 @@ function RenderingConsistencyGuard() {
   return null;
 }
 
-export function World() {
+/** Aguarda a sala, os modelos permanentes e alguns quadros do renderer.
+ * A tela de loading só começa seu fade após a cena de verdade estar montada.
+ */
+function SceneReadyProbe({ onReady }: { onReady: () => void }) {
+  const { scene } = useThree();
+  const frames = useRef(0);
+  const reported = useRef(false);
+  useFrame(() => {
+    if (reported.current) return;
+    const wall = scene.getObjectByName('room-wall-back');
+    const desk = scene.getObjectByName('medical-desk-surface');
+    const imac = scene.getObjectByName('medical-desk-imac');
+    const healthDisabled =
+      typeof window !== 'undefined' &&
+      new URLSearchParams(window.location.search).get('healthModels') === 'off';
+    const healthModels = ['mesa', 'maca', 'trolley'];
+    const healthReady =
+      healthDisabled ||
+      healthModels.every((name) => {
+        const model = scene.getObjectByName(`health-user-model-${name}`);
+        return model && model.children.length > 0;
+      });
+    if (!wall || (!healthDisabled && (!desk || !imac)) || !healthReady) {
+      frames.current = 0;
+      return;
+    }
+    if (++frames.current < 3) return;
+    reported.current = true;
+    // useFrame roda ANTES de gl.render(); este callback ocorre após o frame.
+    window.setTimeout(onReady, 0);
+  });
+  return null;
+}
+
+export function World({
+  onSceneReady,
+  showDevTools = false,
+}: {
+  onSceneReady: () => void;
+  showDevTools?: boolean;
+}) {
+  const showRollDebug =
+    showDevTools &&
+    import.meta.env.DEV &&
+    typeof window !== 'undefined' &&
+    new URLSearchParams(window.location.search).get('xr-roll-test') === '1';
+  const [rollDegrees, setRollDegrees] = useState(0);
+  const [rollProbe, setRollProbe] = useState('Aguardando câmera');
+  const effectiveRoll = showRollDebug ? rollDegrees : 0;
+  useEffect(() => {
+    if (!showRollDebug) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
+        return;
+      if (event.key === '[') setRollDegrees((d) => Math.max(-90, d - 15));
+      else if (event.key === ']') setRollDegrees((d) => Math.min(90, d + 15));
+      else if (event.key === '\\') setRollDegrees(0);
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [showRollDebug]);
   const mobileXR =
     typeof navigator !== 'undefined' && /OculusBrowser|Quest|Android/i.test(navigator.userAgent);
   const quality = mobileXR ? 1 : 1.5;
   return (
     <>
+      {showRollDebug && (
+        <VRRollDebugPanel degrees={rollDegrees} setDegrees={setRollDegrees} status={rollProbe} />
+      )}
       <Canvas
         dpr={[1, quality]}
         shadows={false}
@@ -1377,12 +1544,19 @@ export function World() {
         <StableRoomLighting />
         <XR store={xrStore}>
           <RenderingConsistencyGuard />
-          <CalibratedXROrigin />
+          <CalibratedXROrigin
+            rollDegrees={effectiveRoll}
+            onRollProbe={showRollDebug ? setRollProbe : undefined}
+          />
+          <XRMusicUnlock />
+          <XRSessionTutorialTrigger />
+          <XRTutorial />
           <VRInterface />
           <Classroom />
           <Board />
         </XR>
-        <FixedSeatCamera />
+        <FixedSeatCamera rollDegrees={effectiveRoll} />
+        <SceneReadyProbe onReady={onSceneReady} />
       </Canvas>
     </>
   );

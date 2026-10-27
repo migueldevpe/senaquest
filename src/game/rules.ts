@@ -21,6 +21,19 @@ export const SPECIAL_SQUARES: Record<
   25: { kind: 'benefit', destination: 28 },
   26: { kind: 'malefit', destination: 20 },
 };
+/** Texto pedagógico do evento efetivamente ativado (Desktop e VR usam a mesma mensagem). */
+export const SPECIAL_SQUARE_DESCRIPTIONS: Readonly<Record<number, string>> = {
+  10: 'Obstáculo: ficará 1 turno completo sem jogar.',
+  11: 'Escudo: ganhou imunidade contra o próximo malefício.',
+  12: 'Retrocesso: volte 3 casas, chegando à casa 9.',
+  17: 'Portal do azar: troca de posição com o único jogador em último lugar.',
+  18: 'Atalho: avance diretamente à casa 20.',
+  19: 'Retrocesso: volte à casa 13.',
+  24: 'Suspensão: ficará 2 turnos completos sem jogar.',
+  25: 'Atalho: avance diretamente à casa 28.',
+  26: 'Retrocesso: volte à casa 20.',
+};
+
 export function resolveMove(position: number, die: number, correct: boolean) {
   const predicted = position + die > 30 ? position : clamp(position + die);
   // Erros mantêm a regra anterior: recuar o valor do dado.

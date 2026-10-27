@@ -1,0 +1,16 @@
+{
+  "author": "Kenney",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "officialPacks": [
+    "https://kenney.nl/assets/furniture-kit",
+    "https://kenney.nl/assets/prototype-kit",
+    "https://kenney.nl/assets/car-kit"
+  ],
+  "publicGlbMirror": "https://github.com/Hidencod/tge-assets",
+  "details": "Objetos temporários, CC0 Kenney. Não adicionar dependências npm. Remover tudo usando o script de limpeza.",
+  "temporary": true,
+  "removedBy": "node scripts/remove-temporary-sector-decor.mjs",
+  "catalog": "https://raw.githubusercontent.com/Hidencod/tge-assets/main/catalog.json",
+  "assetCount": 22
+}

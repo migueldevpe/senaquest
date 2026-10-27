@@ -6,8 +6,8 @@ import { FBXCharacter } from './FBXCharacter';
 import { CHARACTER_CONFIG } from './characterConfig';
 
 export function FBXChico(props: { position: [number, number, number]; rotation: number }) {
-  const source = useLoader(FBXLoader, '/models/chico/chico.fbx');
-  const texture = useLoader(THREE.TextureLoader, '/models/chico/chico-uv.webp');
+  const source = useLoader(FBXLoader, '/models/chico.fbx');
+  const texture = useLoader(THREE.TextureLoader, '/models/chico-uv.webp');
   return (
     <FBXCharacter
       {...props}
@@ -20,5 +20,5 @@ export function FBXChico(props: { position: [number, number, number]; rotation: 
     />
   );
 }
-useLoader.preload(FBXLoader, '/models/chico/chico.fbx');
-useLoader.preload(THREE.TextureLoader, '/models/chico/chico-uv.webp');
+useLoader.preload(FBXLoader, '/models/chico.fbx');
+useLoader.preload(THREE.TextureLoader, '/models/chico-uv.webp');

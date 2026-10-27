@@ -1,10 +1,22 @@
 import { loadPoppinsCanvas } from './poppins';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { COURSES, COURSE_IDS, NAMES } from '../game/data';
 import { playSound } from '../game/sounds';
-import { currentPlayer, currentQuestion, useGame } from '../game/store';
+import { currentTutorialStep, useTutorial } from './tutorialState';
+import { useThree } from '@react-three/fiber';
+import { currentArea, currentPlayer, currentQuestion, useGame } from '../game/store';
+import {
+  TABLET,
+  tabletActions,
+  tabletEllipsis,
+  tabletGrid,
+  tabletRectToWorld,
+  tabletTimerRects,
+  tabletWrap,
+  type Rect,
+} from './tabletLayout';
 
 const W = 1200,
   H = 740;
@@ -12,7 +24,29 @@ type Hit = { x: number; y: number; w: number; h: number; action: () => void; col
 type Clock = { phase: string; seconds: number | null; duration: number; deadline?: number };
 const ANSWER_COLORS = ['#e84141', '#2488e8', '#e5ac21', '#24a568'] as const;
 const orange = '#ff981a';
-const navy = '#103f69';
+const timerRects = tabletTimerRects();
+const timerWorld = tabletRectToWorld(timerRects.fill);
+
+/** Retângulo 3D arredondado: acompanha o contorno da trilha, sem bordas quadradas.
+ * O desenho é criado uma única vez e sua escala varia, sem upload de textura. */
+function roundedTimerGeometry(w: number, h: number): THREE.ShapeGeometry {
+  const r = Math.min(h / 2, w / 2);
+  const l = -w / 2;
+  const b = -h / 2;
+  const right = w / 2;
+  const top = h / 2;
+  const shape = new THREE.Shape();
+  shape.moveTo(l + r, b);
+  shape.lineTo(right - r, b);
+  shape.quadraticCurveTo(right, b, right, b + r);
+  shape.lineTo(right, top - r);
+  shape.quadraticCurveTo(right, top, right - r, top);
+  shape.lineTo(l + r, top);
+  shape.quadraticCurveTo(l, top, l, top - r);
+  shape.lineTo(l, b + r);
+  shape.quadraticCurveTo(l, b, l + r, b);
+  return new THREE.ShapeGeometry(shape, 6);
+}
 function round(
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -49,6 +83,27 @@ function write(
   ctx.fillStyle = color;
   ctx.fillText(s, x, y);
 }
+/** Centraliza o contorno visível do símbolo (✓/×), e não a largura abstrata
+ * do caractere, que varia muito entre fontes/visores WebXR. */
+function centeredFeedbackGlyph(
+  ctx: CanvasRenderingContext2D,
+  glyph: string,
+  centerX: number,
+  centerY: number,
+  color: string,
+) {
+  ctx.save();
+  ctx.font = '700 72px Poppins, sans-serif';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  const metrics = ctx.measureText(glyph);
+  const horizontalOffset = (metrics.actualBoundingBoxRight - metrics.actualBoundingBoxLeft) / 2;
+  const verticalOffset = (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2;
+  ctx.fillText(glyph, centerX - horizontalOffset, centerY + verticalOffset);
+  ctx.restore();
+}
+
 function lines(
   ctx: CanvasRenderingContext2D,
   s: string,
@@ -62,37 +117,31 @@ function lines(
   maxLines = 5,
 ) {
   ctx.font = `${bold ? '700' : '500'} ${size}px Poppins, sans-serif`;
-  const words = s.split(/\s+/);
-  let line = '',
-    list: string[] = [];
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > max && line) {
-      list.push(line);
-      line = word;
-    } else line = next;
+  const measure = (value: string) => ctx.measureText(value).width;
+  const wrapped = tabletWrap(s, measure, max);
+  const visible = wrapped.slice(0, maxLines);
+  if (wrapped.length > maxLines) {
+    const last = visible.length - 1;
+    visible[last] = tabletEllipsis(`${visible[last]}…`, measure, max);
   }
-  if (line) list.push(line);
-  const shown = list.slice(0, maxLines).map((value, i) => {
-    if (i !== maxLines - 1 || list.length <= maxLines) return value;
-    while (value.length > 1 && ctx.measureText(value + '…').width > max) value = value.slice(0, -1);
-    return value + '…';
+  const lineHeight = size * 1.35;
+  visible.forEach((value, i) => {
+    const yy =
+      y + (align === 'center' ? (i - (visible.length - 1) / 2) * lineHeight : i * lineHeight);
+    write(ctx, tabletEllipsis(value, measure, max), x, yy, size, color, bold, align);
   });
-  shown.forEach((v, i) =>
-    write(
-      ctx,
-      v,
-      x,
-      y + (align === 'center' ? i - (shown.length - 1) / 2 : i) * (size * 1.32),
-      size,
-      color,
-      bold,
-      align,
-    ),
-  );
+  return visible.length;
 }
+
 export function VRTabletScreen() {
   const game = useGame();
+  const { gl } = useThree();
+  const tutorialMode = useTutorial((s) => s.mode);
+  const tutorialIndex = useTutorial((s) => s.index);
+  const trainingTablet =
+    tutorialMode === 'vr' && currentTutorialStep('vr', tutorialIndex) === 'tablet';
+  const [trainingError, setTrainingError] = useState(false);
+  useEffect(() => setTrainingError(false), [tutorialMode, tutorialIndex]);
   const [page, setPage] = useState(0);
   const [fontReady, setFontReady] = useState(false);
   useEffect(() => {
@@ -114,6 +163,8 @@ export function VRTabletScreen() {
   const pointerLastSeen = useRef(0);
   const clockRef = useRef<Clock>({ phase: '', seconds: null, duration: 0 });
   const timerBar = useRef<THREE.Mesh>(null);
+  const timerGeometry = useMemo(() => roundedTimerGeometry(timerWorld.w, timerWorld.h), []);
+  useEffect(() => () => timerGeometry.dispose(), [timerGeometry]);
   const [pressed, setPressed] = useState(-1);
   const pressStartedAt = useRef(0);
   const [clock, setClock] = useState<Clock>({ phase: '', seconds: null, duration: 0 });
@@ -144,36 +195,92 @@ export function VRTabletScreen() {
     setPressed(index);
   };
 
-  // Persist hit regions with the texture: a new render must not erase them.
-  const hitsRef = useRef<Hit[]>([]);
-  const texture = useMemo(() => {
-    const hits: Hit[] = [];
+  // O canvas e a textura GPU persistem por toda a vida do tablet.
+  // O redesenho ocorre apenas quando a fase, os dados, o relógio ou o hover mudam.
+  const surface = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = W;
     canvas.height = H;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    ctx.fillStyle = navy;
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.anisotropy = 4;
+    return { canvas, texture };
+  }, []);
+  // Persist hit regions with the texture: a new render must not erase them.
+  const hitsRef = useRef<Hit[]>([]);
+  useLayoutEffect(() => {
+    const ctx = surface.canvas.getContext('2d');
+    if (!ctx) return;
+    const hits: Hit[] = [];
+    const C = {
+      surface: '#103f69',
+      card: '#20577e',
+      cardDark: '#18496e',
+      inset: '#285e80',
+      secondary: '#2879be',
+      cream: '#fff',
+      muted: '#c4d8e8',
+      accent: '#ffb05a',
+      divider: '#5882a0',
+    };
+    const M = TABLET;
+    const right = M.width - M.inset;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = C.surface;
     ctx.fillRect(0, 0, W, H);
-    const button = (
-      label: string,
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(24, 18, W - 48, H - 36);
+    ctx.clip();
+
+    const text = (
+      value: string,
+      x: number,
+      y: number,
+      size = 27,
+      color = C.cream,
+      bold = false,
+      align: CanvasTextAlign = 'left',
+    ) => write(ctx, value, x, y, size, color, bold, align);
+    const paragraph = (
+      value: string,
       x: number,
       y: number,
       w: number,
-      h: number,
+      size = 27,
+      color = C.cream,
+      bold = false,
+      align: CanvasTextAlign = 'left',
+      maxLines = 3,
+    ) => lines(ctx, value, x, y, w, size, color, bold, align, maxLines);
+    const panel = (rect: Rect, fill = C.card, outline?: string, radius = 16) =>
+      round(ctx, rect.x, rect.y, rect.w, rect.h, radius, fill, outline);
+    const rule = (y: number) => {
+      ctx.strokeStyle = C.divider;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(M.inset, y);
+      ctx.lineTo(right, y);
+      ctx.stroke();
+    };
+    const sectionTitle = (value: string, y: number = M.header.titleY, size: number = 36) =>
+      paragraph(value, M.inset, y, M.width - 2 * M.inset, size, C.accent, true, 'left', 2);
+    const sectionMessage = (value: string, y: number = M.header.messageY, size: number = 27) =>
+      paragraph(value, M.inset, y, M.width - 2 * M.inset, size, C.cream, false, 'left', 2);
+
+    const button = (
+      label: string,
+      rect: Rect,
       action: () => void,
       primary = true,
-      size = 27,
+      fontSize = 26,
       override?: string,
     ) => {
       const index = hits.length;
-      const base = override ?? (primary ? orange : '#2879be');
+      const base = override ?? (primary ? orange : C.secondary);
+      const baseColor = new THREE.Color(base);
       const selected = hovered === index;
       const active = pressed === index;
-      // All clickable controls share the same hover/press feedback,
-      // including colored quiz answers and secondary actions.
-      const baseColor = new THREE.Color(base);
-      // The whole face must brighten, not only its outline (lottery/feedback/start).
       const face = selected
         ? baseColor
             .clone()
@@ -182,304 +289,367 @@ export function VRTabletScreen() {
         : active
           ? baseColor.clone().multiplyScalar(0.7).getStyle()
           : base;
-      round(ctx, x, y + 6, w, h, 16, baseColor.clone().multiplyScalar(0.55).getStyle());
-      round(
-        ctx,
-        x,
-        y + (active ? 4 : selected ? -2 : 0),
-        w,
-        h - (active ? 4 : 0),
-        16,
+      panel({ ...rect, y: rect.y + 5 }, baseColor.clone().multiplyScalar(0.55).getStyle());
+      panel(
+        { ...rect, y: rect.y + (active ? 4 : selected ? -2 : 0), h: rect.h - (active ? 4 : 0) },
         face,
-        selected ? '#ffffff' : baseColor.clone().lerp(new THREE.Color('#ffffff'), 0.27).getStyle(),
+        selected ? '#fff' : baseColor.clone().lerp(new THREE.Color('#ffffff'), 0.27).getStyle(),
       );
-      // A borda já é desenhada em round(); evitar contorno duplicado e desproporcional.
-
-      lines(
-        ctx,
+      // Clipping individual: uma opção longa nunca invade outra opção.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(rect.x + 12, rect.y + 2, rect.w - 24, rect.h - 4);
+      ctx.clip();
+      paragraph(
         label,
-        x + w / 2,
-        y + h / 2 + (active ? 3 : 0),
-        w - 30,
-        size,
-        override ? '#ffffff' : primary ? '#09243b' : '#fff',
+        rect.x + rect.w / 2,
+        rect.y + rect.h / 2 + (active ? 3 : 0),
+        rect.w - 34,
+        fontSize,
+        override ? C.cream : primary ? '#09243b' : C.cream,
         true,
         'center',
-        2,
+        3,
       );
-      hits.push({ x, y, w, h, action, color: base });
+      ctx.restore();
+      hits.push({ ...rect, action, color: base });
+    };
+    const actionRow = (
+      items: { label: string; action: () => void; primary?: boolean; width: number }[],
+      y: number = M.footer.y,
+      height: number = M.footer.h,
+    ) => {
+      tabletActions(
+        items.map((item) => item.width),
+        y,
+        height,
+      ).forEach((rect, i) => {
+        button(items[i].label, rect, items[i].action, items[i].primary !== false);
+      });
     };
     const timer = (label: string) => {
-      round(ctx, 32, 25, 1136, 108, 16, '#235679');
-      write(ctx, `◷ ${label}`, 53, 57, 22, '#fff', true);
+      panel(M.timer, C.inset);
+      text(
+        `◷ ${label}`,
+        M.timer.x + M.timerText.inset,
+        M.timer.y + M.timerText.centerY,
+        23,
+        C.cream,
+        true,
+      );
       if (clock.phase === game.phase && clock.seconds !== null)
-        write(
-          ctx,
+        text(
           `${Math.max(0, Math.ceil(clock.seconds))} s`,
-          1139,
-          57,
-          34,
-          '#ffb05a',
+          M.timer.x + M.timer.w - M.timerText.inset,
+          M.timer.y + M.timerText.centerY,
+          31,
+          C.accent,
           true,
           'right',
         );
-      round(ctx, 52, 101, 1096, 12, 7, '#46748f');
-      // The orange fill is drawn on a separate, frequently updated texture.
-      // The static interface canvas is only regenerated when its contents change.
+      panel(timerRects.background, '#46748f', undefined, M.timerTrack.radius);
+      // A barra alaranjada é uma geometria separada, animada sem upload de textura.
     };
-    // Canvas flex-like layout: all screens use the same inset, gaps and rows.
-    const UI = {
-      inset: 42,
-      width: 1116,
-      gap: 20,
-      smallGap: 10,
-      timerBottom: 133,
-      headingTop: 170,
-      bodyTop: 242,
-      actionsBottom: 698,
-    } as const;
-    const row = (
-      x: number,
-      y: number,
-      width: number,
-      items: { width: number; draw: (x: number) => void }[],
-    ) => {
-      // Equivalent to justify-content: space-between.
-      const occupied = items.reduce((total, item) => total + item.width, 0);
-      const space = items.length > 1 ? (width - occupied) / (items.length - 1) : 0;
-      let cursor = x;
-      items.forEach((item) => {
-        item.draw(cursor);
-        cursor += item.width + space;
+    const scores = (values: (number | null)[], activePlayer: number | undefined) => {
+      const cells = tabletGrid(2, NAMES.length, M.inset, 351, M.width - M.inset * 2, 82, M.gap, 18);
+      cells.forEach((rect, i) => {
+        panel(rect, C.card, i === activePlayer ? orange : undefined, 13);
+        text(NAMES[i], rect.x + 22, rect.y + rect.h / 2, 25, C.cream, true);
+        text(
+          values[i] === null ? '—' : String(values[i]),
+          rect.x + rect.w - 22,
+          rect.y + rect.h / 2,
+          28,
+          i === activePlayer ? C.accent : C.cream,
+          true,
+          'right',
+        );
       });
-      void y;
     };
-    const heading = (title: string, y: number = UI.headingTop) =>
-      lines(ctx, title, UI.inset, y, UI.width, 36, '#ffb05a', true, 'left', 2);
-    const message = (value: string, y: number = UI.bodyTop, size: number = 27) =>
-      lines(ctx, value, UI.inset, y, UI.width, size, '#fff', false, 'left', 3);
-    const actions = (
-      buttons: { label: string; action: () => void; primary?: boolean; width: number }[],
-      y = 570,
-    ) => {
-      const left = buttons.length === 1 ? UI.inset : UI.inset;
-      row(
-        left,
-        y,
-        UI.width,
-        buttons.map((b) => ({
-          width: b.width,
-          draw: (x) => button(b.label, x, y, b.width, 100, b.action, b.primary !== false, 26),
-        })),
-      );
+    const footerInfo = (value: string) => {
+      panel({ x: M.inset, y: 590, w: M.width - M.inset * 2, h: 92 }, C.cardDark);
+      paragraph(value, 600, 636, 1010, 25, C.muted, false, 'center', 2);
     };
-    const card = (x: number, y: number, w: number, h: number, text: string, outlined = false) => {
-      round(ctx, x, y, w, h, 14, '#215c84', outlined ? orange : undefined);
-      lines(ctx, text, x + 20, y + h / 2, w - 40, 25, '#fff', false, 'left', 2);
-    };
-    // Clip all dynamically composed text and controls to the physical display.
-    // Clip every screen state to the display, leaving the bezel untouched.
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(24, 18, W - 48, H - 36);
-    ctx.clip();
+
     const phase = game.phase;
-    const p = currentPlayer(game),
-      human = p === 0;
-    const question = phase === 'question' || phase === 'feedback' ? currentQuestion(game) : null;
-    if (phase === 'choose') {
-      write(ctx, 'Bem-vindo ao SENAQUEST!', UI.inset, 88, 44, '#fff', true);
-      message('Escolha o curso da sua preferência.', 151, 28);
-      COURSE_IDS.forEach((id, i) => {
-        const x = UI.inset + (i % 2) * 568;
-        const y = 206 + Math.floor(i / 2) * 154;
-        button(COURSES[id].name, x, y, 548, 122, () => game.selectCourse(id), true, 24);
-      });
-    } else if (phase === 'confirm') {
-      write(ctx, 'Confirmar curso', UI.inset, 88, 45, '#fff', true);
-      lines(
-        ctx,
-        COURSES[game.course].name,
-        UI.inset,
-        183,
-        UI.width,
-        39,
-        '#ffb05a',
-        true,
-        'left',
-        2,
+    if ((phase === 'choose' || phase === 'confirm') && tutorialMode !== 'vr') {
+      button(
+        '◈ Tutorial VR',
+        { x: 949, y: 42, w: 207, h: 56 },
+        () => {
+          if (gl.xr.isPresenting) useTutorial.getState().start('vr');
+        },
+        false,
+        20,
       );
-      lines(
-        ctx,
-        COURSES[game.course].areas.join(' • '),
-        UI.inset,
-        325,
-        UI.width,
-        27,
-        '#fff',
+    }
+    const current = currentPlayer(game);
+    const human = current === 0;
+    const question = phase === 'question' || phase === 'feedback' ? currentQuestion(game) : null;
+    if (trainingTablet) {
+      sectionTitle('Treinamento · Tablet VR', 105, 43);
+      sectionMessage('Qual é a última casa do tabuleiro?', 185, 31);
+      panel({ x: M.inset, y: 256, w: M.width - M.inset * 2, h: 99 }, C.cardDark);
+      text(
+        'Esta é uma pergunta de demonstração. Não altera a partida.',
+        600,
+        305,
+        24,
+        C.muted,
+        false,
+        'center',
+      );
+      const options = ['A) 10', 'B) 30', 'C) 20', 'D) 40'];
+      const cells = tabletGrid(
+        2,
+        options.length,
+        M.inset,
+        399,
+        M.width - M.inset * 2,
+        93,
+        M.gap,
+        22,
+      );
+      options.forEach((option, i) =>
+        button(
+          option,
+          cells[i],
+          () => {
+            if (i === 1) useTutorial.getState().next();
+            else setTrainingError(true);
+          },
+          true,
+          26,
+          ANSWER_COLORS[i],
+        ),
+      );
+      if (trainingError) {
+        panel({ x: M.inset, y: 626, w: M.width - M.inset * 2, h: 62 }, C.cardDark);
+        text('Tente novamente: a última casa é a 30.', 600, 657, 24, C.accent, true, 'center');
+      }
+    } else if (phase === 'choose') {
+      sectionTitle('Bem-vindo ao SENAQUEST!', 96, 44);
+      sectionMessage('Escolha o curso da sua preferência.', 170, 30);
+      const cells = tabletGrid(
+        2,
+        COURSE_IDS.length,
+        M.inset,
+        245,
+        M.width - 2 * M.inset,
+        132,
+        M.gap,
+        26,
+      );
+      COURSE_IDS.forEach((id, i) =>
+        button(COURSES[id].name, cells[i], () => game.selectCourse(id), true, 27),
+      );
+    } else if (phase === 'confirm') {
+      sectionTitle('Confirmar curso', 105, 43);
+      sectionTitle(COURSES[game.course].name, 197, 36);
+      rule(253);
+      panel({ x: M.inset, y: 281, w: M.width - M.inset * 2, h: 235 }, C.cardDark);
+      paragraph(
+        COURSES[game.course].areas.join('  •  '),
+        M.inset + 28,
+        328,
+        M.width - M.inset * 2 - 56,
+        29,
+        C.cream,
         false,
         'left',
         4,
       );
-      actions(
-        [
-          { label: 'Confirmar e entrar', action: game.confirmCourse, width: 548 },
-          { label: 'Voltar', action: game.enterBoard, primary: false, width: 548 },
-        ],
-        566,
-      );
+      actionRow([
+        { label: 'Confirmar e entrar', action: game.confirmCourse, width: 548 },
+        { label: 'Voltar', action: game.enterBoard, primary: false, width: 548 },
+      ]);
     } else if (phase === 'intro') {
       timer('Avanço automático');
-      heading('Vamos descobrir quem começa?');
-      message('Cada participante lançará o dado. Quem tirar o maior número começa a partida.');
-      actions([{ label: 'Iniciar sorteio agora', action: game.startLottery, width: 548 }], 565);
+      sectionTitle('Vamos descobrir quem começa?');
+      sectionMessage(
+        'Cada participante lançará o dado. Quem tirar o maior número começa a partida.',
+      );
+      actionRow([{ label: 'Iniciar sorteio agora', action: game.startLottery, width: 560 }]);
     } else if (phase === 'lottery' || phase === 'lotteryRolling') {
       timer('Avanço automático');
-      heading('Sorteio inicial');
-      message(game.message || 'Cada participante lançará o dado.', 246);
-      NAMES.forEach((name, i) => {
-        const x = UI.inset + (i % 2) * 568;
-        const y = 348 + Math.floor(i / 2) * 100;
-        card(
-          x,
-          y,
-          548,
-          82,
-          `${name}: ${game.lotteryRolls[i] ?? '—'}`,
-          game.eligible[game.lotteryIndex] === i,
-        );
-      });
+      sectionTitle('Sorteio inicial');
+      sectionMessage(game.message || 'Cada participante lançará o dado.');
+      scores(
+        NAMES.map((_, i) => game.lotteryRolls[i] ?? null),
+        game.eligible[game.lotteryIndex],
+      );
       if (phase === 'lottery' && game.eligible[game.lotteryIndex] === 0)
-        actions([{ label: '🎲 Lançar dado', action: game.lotteryStep, width: 420 }], 585);
+        actionRow([{ label: '🎲 Lançar dado', action: game.lotteryStep, width: 480 }], 585, 88);
     } else if (phase === 'lotteryResult') {
       timer('Avanço automático');
-      heading(game.message || 'Sorteio concluído');
-      message('O sorteio não movimentou os marcadores.');
-      actions([{ label: 'Começar partida', action: game.beginMatch, width: 470 }], 565);
+      sectionTitle(game.message || 'Sorteio concluído');
+      sectionMessage('O sorteio não movimentou os marcadores.');
+      actionRow([{ label: 'Começar partida', action: game.beginMatch, width: 500 }]);
     } else if (phase === 'turn') {
       timer('Avanço automático');
-      heading(human ? 'Sua vez!' : `Vez de ${NAMES[p]}`);
-      message(
-        human ? 'Prepare-se para lançar o dado.' : `${NAMES[p]} está preparando o lançamento.`,
+      sectionTitle(human ? 'Sua vez!' : `Vez de ${NAMES[current]}`);
+      sectionMessage(
+        human
+          ? 'Prepare-se para lançar o dado.'
+          : `${NAMES[current]} está preparando o lançamento.`,
       );
-      if (human) actions([{ label: '🎲 Lançar dado', action: game.throwDie, width: 460 }], 565);
+      if (human) actionRow([{ label: '🎲 Lançar dado', action: game.throwDie, width: 500 }]);
     } else if (phase === 'question' && question) {
       timer('Tempo para responder');
-      round(ctx, UI.inset, 153, 228, 50, 22, orange);
-      write(ctx, 'Banco de dados', UI.inset + 114, 178, 23, '#09243b', true, 'center');
-      write(ctx, `CASA ${game.questionIndex}`, 1156, 178, 23, '#fff', false, 'right');
-      ctx.strokeStyle = '#60809a';
-      ctx.beginPath();
-      ctx.moveTo(UI.inset, 218);
-      ctx.lineTo(1158, 218);
-      ctx.stroke();
-      const max = 145,
-        total = Math.ceil(question.prompt.length / max);
-      const fragment = question.prompt.slice(page * max, (page + 1) * max);
-      round(ctx, UI.inset, 238, UI.width, 239, 16, '#15486f');
-      lines(ctx, fragment, 600, 349, 1030, 33, '#fff', true, 'center', 4);
-      if (total > 1)
+      const category = currentArea(game);
+      ctx.font = '700 23px Poppins, sans-serif';
+      const badgeWidth = Math.min(780, Math.max(230, ctx.measureText(category).width + 54));
+      panel({ x: M.inset, y: 160, w: badgeWidth, h: 49 }, orange, undefined, 23);
+      paragraph(
+        category,
+        M.inset + badgeWidth / 2,
+        185,
+        badgeWidth - 28,
+        22,
+        '#09243b',
+        true,
+        'center',
+        1,
+      );
+      text(`CASA ${game.questionIndex}`, right, 185, 24, C.cream, true, 'right');
+      rule(227);
+      const questionRect = { x: M.inset, y: 246, w: M.width - M.inset * 2, h: 222 };
+      panel(questionRect, C.cardDark);
+      ctx.font = '700 32px Poppins, sans-serif';
+      const wrapped = tabletWrap(
+        question.prompt,
+        (value) => ctx.measureText(value).width,
+        questionRect.w - 64,
+      );
+      const chunk = 3;
+      const pageCount = Math.max(1, Math.ceil(wrapped.length / chunk));
+      const visiblePage = Math.min(page, pageCount - 1);
+      const shown = wrapped.slice(visiblePage * chunk, (visiblePage + 1) * chunk).join(' ');
+      paragraph(
+        shown,
+        600,
+        pageCount > 1 ? 333 : 357,
+        questionRect.w - 70,
+        32,
+        C.cream,
+        true,
+        'center',
+        chunk,
+      );
+      if (pageCount > 1)
         button(
-          `Enunciado ${page + 1}/${total} · Próximo`,
-          375,
-          431,
-          450,
-          46,
-          () => setPage((v) => (v + 1) % total),
+          `Enunciado ${visiblePage + 1}/${pageCount} · Próximo`,
+          { x: 417, y: 416, w: 366, h: 41 },
+          () => setPage((v) => (v + 1) % pageCount),
           false,
-          20,
+          18,
         );
-      if (human)
-        question.options.forEach((option, i) => {
-          const x = UI.inset + (i % 2) * 568,
-            y = 510 + Math.floor(i / 2) * 90;
+      if (human) {
+        const cells = tabletGrid(2, 4, M.inset, 500, M.width - M.inset * 2, 82, M.gap, 18);
+        question.options.forEach((option, i) =>
           button(
             `${['▲', '◆', '●', '■'][i]}  ${option}`,
-            x,
-            y,
-            548,
-            78,
+            cells[i],
             () => game.answerQuestion(i),
             true,
-            23,
+            option.length > 66 ? 20 : 23,
             ANSWER_COLORS[i],
-          );
-        });
-      else {
-        round(ctx, UI.inset, 542, UI.width, 112, 15, '#205b83');
-        lines(
-          ctx,
-          `${NAMES[p]} está analisando a pergunta.`,
-          600,
-          598,
-          1020,
-          26,
-          '#fff',
-          false,
-          'center',
+          ),
         );
+      } else {
+        footerInfo(`${NAMES[current]} está analisando a pergunta.`);
       }
     } else if (phase === 'feedback') {
       timer('Avanço automático');
-      // A flex-column equivalent: timer -> result -> answer card -> action, with consistent gaps.
-      const iconY = 202;
-      round(ctx, 543, iconY - 54, 114, 108, 57, game.outcome === 'correct' ? '#0e9d75' : '#b9554a');
-      write(ctx, game.outcome === 'correct' ? '✓' : '×', 600, iconY, 80, '#fff', true, 'center');
-      lines(ctx, game.message, 600, 314, 1040, 29, '#fff', true, 'center', 2);
+      const good = game.outcome === 'correct';
+      panel({ x: 549, y: 157, w: 102, h: 100 }, good ? '#0e9d75' : '#b9554a', undefined, 51);
+      centeredFeedbackGlyph(ctx, good ? '✓' : '×', 600, 207, C.cream);
+      paragraph(game.message, 600, 318, 1040, 29, C.cream, true, 'center', 2);
       if (question) {
-        round(ctx, UI.inset, 407, UI.width, 164, 14, '#24577d');
-        write(ctx, 'RESPOSTA CORRETA', UI.inset + 23, 434, 23, '#ffb05a', true);
-        lines(
-          ctx,
+        panel({ x: M.inset, y: 381, w: M.width - M.inset * 2, h: 190 }, C.card);
+        text('RESPOSTA CORRETA', M.inset + 25, 408, 23, C.accent, true);
+        paragraph(
           question.options[question.correct],
-          UI.inset + 23,
-          483,
-          UI.width - 46,
-          28,
-          '#fff',
+          M.inset + 25,
+          448,
+          M.width - M.inset * 2 - 50,
+          27,
+          C.cream,
           true,
           'left',
           2,
         );
-        lines(
-          ctx,
+        paragraph(
           question.explanation,
-          UI.inset + 23,
-          535,
-          UI.width - 46,
+          M.inset + 25,
+          518,
+          M.width - M.inset * 2 - 50,
           21,
-          '#fff',
+          C.muted,
           false,
           'left',
           2,
         );
       }
-      button('Entendi, continuar →', 365, 600, 470, 84, game.finishFeedback);
-    } else if (phase === 'finished' || phase === 'bankEmpty') {
-      if (phase === 'finished') timer('Retorno ao menu');
-      heading(phase === 'finished' ? '🏆 Classificação final' : 'Banco de questões esgotado', 180);
-      message(phase === 'finished' ? `${NAMES[game.winner ?? 0]} venceu!` : game.message, 255, 36);
-      actions(
-        [
-          { label: 'Jogar novamente', action: () => game.restart(false), width: 548 },
-          { label: 'Trocar curso', action: () => game.restart(true), primary: false, width: 548 },
-        ],
-        565,
+      actionRow(
+        [{ label: 'Entendi, continuar →', action: game.finishFeedback, width: 505 }],
+        592,
+        84,
       );
+    } else if (phase === 'moving') {
+      timer('Avanço automático');
+      // O evento precisa ser explicado, não apenas receber o título genérico
+      // 'EVENTO DA CASA X'. O mesmo texto detalhado é usado no Desktop.
+      const special = /CASA (\d+) —/.exec(game.message);
+      sectionTitle(special ? `Evento especial · Casa ${special[1]}` : 'Movimentação');
+      panel({ x: M.inset, y: 292, w: M.width - M.inset * 2, h: 264 }, C.cardDark);
+      paragraph(
+        game.message,
+        M.width / 2,
+        413,
+        M.width - 2 * M.inset - 72,
+        29,
+        C.cream,
+        true,
+        'center',
+        5,
+      );
+    } else if (phase === 'finished' || phase === 'bankEmpty') {
+      if (phase === 'finished') timer('Avanço automático');
+      sectionTitle(phase === 'finished' ? '🏆 Classificação final' : 'Banco de questões esgotado');
+      sectionMessage(
+        phase === 'finished' ? `${NAMES[game.winner ?? 0]} venceu!` : game.message,
+        270,
+        33,
+      );
+      actionRow([
+        { label: 'Jogar novamente', action: () => game.restart(false), width: 548 },
+        { label: 'Trocar curso', action: () => game.restart(true), primary: false, width: 548 },
+      ]);
     } else {
       timer('Avanço automático');
-      heading(phase === 'rolling' ? '🎲 Dado em movimento' : game.message || 'Aguarde...');
-      message(game.message || 'Aguarde a próxima etapa.');
+      sectionTitle(phase === 'rolling' ? '🎲 Dado em movimento' : game.message || 'Aguarde...');
+      sectionMessage(game.message || 'Aguarde a próxima etapa.');
     }
-    // Text never bleeds past the display; all dynamic elements share a safe inset.
     ctx.restore();
     hitsRef.current = hits;
-    const t = new THREE.CanvasTexture(canvas);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 4;
-    return t;
-  }, [game, page, hovered, pressed, clock, fontReady]);
-  useEffect(() => () => texture?.dispose(), [texture]);
+    surface.texture.needsUpdate = true;
+  }, [
+    surface,
+    game,
+    page,
+    hovered,
+    pressed,
+    clock,
+    fontReady,
+    gl,
+    tutorialMode,
+    tutorialIndex,
+    trainingTablet,
+    trainingError,
+  ]);
+  const texture = surface.texture;
+  useEffect(() => () => surface.texture.dispose(), [surface]);
   // Animate the actual geometry each frame, not a CanvasTexture upload.
   // Both eyes in WebXR see the same bar, and the deadline is shared with desktop.
   useFrame(() => {
@@ -499,8 +669,9 @@ export function VRTabletScreen() {
       : 0;
     const fraction = valid ? Math.max(0, Math.min(1, remaining / c.duration)) : 0;
     bar.scale.x = Math.max(0.0001, fraction);
-    // Keep the left edge fixed as the plane shrinks.
-    bar.position.x = -0.539 + 0.539 * fraction;
+    // Âncora exata na borda esquerda da área interna da trilha.
+    // As coordenadas são convertidas dos mesmos pixels do Canvas, sem offsets mágicos.
+    bar.position.x = timerWorld.x - (timerWorld.w / 2) * (1 - fraction);
     bar.visible = valid && fraction > 0;
   });
   if (!texture) return null;
@@ -516,6 +687,12 @@ export function VRTabletScreen() {
   };
   const activate = (e: { stopPropagation: () => void; uv?: THREE.Vector2; pointerId?: number }) => {
     e.stopPropagation();
+    // O tablet real nunca deve receber comandos durante exercícios demonstrativos.
+    if (
+      useTutorial.getState().mode === 'vr' &&
+      currentTutorialStep('vr', useTutorial.getState().index) !== 'tablet'
+    )
+      return;
     if (!e.uv) return;
     if (
       hoverOwner.current !== null &&
@@ -584,8 +761,13 @@ export function VRTabletScreen() {
         <planeGeometry args={[1.18, 0.7]} />
         <meshBasicMaterial map={texture} toneMapped={false} side={THREE.FrontSide} />
       </mesh>
-      <mesh ref={timerBar} position={[0, 0.247, 0.063]} renderOrder={16} raycast={() => null}>
-        <planeGeometry args={[1.078, 0.011]} />
+      <mesh
+        ref={timerBar}
+        position={[timerWorld.x, timerWorld.y, 0.063]}
+        renderOrder={16}
+        raycast={() => null}
+      >
+        <primitive attach="geometry" object={timerGeometry} />
         <meshBasicMaterial
           color={orange}
           toneMapped={false}

@@ -1,13 +1,22 @@
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SmoothTimer } from './components/SmoothTimer';
 import { World, xrStore, PAWN_COLORS } from './scene/World';
 import { useGame, currentArea, currentPlayer, currentQuestion } from './game/store';
 import { COURSES, COURSE_IDS, NAMES } from './game/data';
 import './style.css';
+import { StartupLoading } from './scene/StartupLoading';
 import { playSound, setSoundVolume } from './game/sounds';
-import { setQuizMusicActive, unlockQuizMusic, disposeQuizMusic } from './game/quizMusic';
-import { setMenuMusicActive, unlockMenuMusic, disposeMenuMusic } from './game/menuMusic';
+import {
+  setBackgroundMusic,
+  unlockBackgroundMusic,
+  disposeBackgroundMusic,
+  isBackgroundMusicBlocked,
+  type MusicContext,
+} from './game/backgroundMusic';
 import { useDiceTuning } from './scene/diceTuning';
+import { DesktopTutorial } from './scene/DesktopTutorial';
+import { useTutorial } from './scene/tutorialState';
+import { isTutorialComplete } from './scene/tutorialFlow';
 
 type AutoPhase =
   | 'intro'
@@ -30,6 +39,10 @@ const AUTO_TIMES: Record<AutoPhase, number> = {
   rollTimeout: 3,
   skipped: 3,
 };
+
+const VICTORY_SECONDS = 45;
+const HUMAN_QUESTION_SECONDS = 20;
+const BOT_QUESTION_SECONDS = 15;
 
 const SCOREBOARD_ANIMATION = {
   durationMs: 460,
@@ -145,9 +158,37 @@ function AnimatedScoreboard({ game }: { game: ReturnType<typeof useGame.getState
 
 const StableWorld = memo(World);
 
-function App() {
+function GameApp({
+  onSceneReady,
+  sceneReady,
+  debugToolsReady,
+}: {
+  onSceneReady: () => void;
+  sceneReady: boolean;
+  debugToolsReady: boolean;
+}) {
   const game = useGame();
+  const startTutorial = useTutorial((s) => s.start);
+  const offeredDesktopTutorial = useRef(false);
+  useEffect(() => {
+    if (!debugToolsReady || game.phase !== 'choose' || offeredDesktopTutorial.current) return;
+    offeredDesktopTutorial.current = true;
+    // Quest Browser opens the hand tutorial inside the headset, not behind XR.
+    if (
+      !/OculusBrowser|Quest/i.test(navigator.userAgent) &&
+      !isTutorialComplete('desktop') &&
+      !useTutorial.getState().mode
+    )
+      startTutorial('desktop');
+  }, [debugToolsReady, game.phase, startTutorial]);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [audioBlocked, setAudioBlocked] = useState(isBackgroundMusicBlocked);
+  useEffect(() => {
+    const onBlocked = (event: Event) => setAudioBlocked((event as CustomEvent<boolean>).detail);
+    window.addEventListener('senaquest:audio-blocked', onBlocked);
+    setAudioBlocked(isBackgroundMusicBlocked());
+    return () => window.removeEventListener('senaquest:audio-blocked', onBlocked);
+  }, []);
   const [debugPlayer, setDebugPlayer] = useState(1);
   const [soundOn, setSoundOn] = useState(true);
   const [soundLevel, setSoundLevel] = useState(0.35);
@@ -202,38 +243,69 @@ function App() {
   const setShowColliders = useDiceTuning((s) => s.setShowColliders);
   const player = currentPlayer(game);
   const [remaining, setRemaining] = useState<number | null>(null);
-  const [victoryRemaining, setVictoryRemaining] = useState(60);
+  const [victoryRemaining, setVictoryRemaining] = useState(VICTORY_SECONDS);
   const [victoryDeadline, setVictoryDeadline] = useState<number | null>(null);
-  // A vitória dura no máximo 60 s; o botão existente 'Trocar curso' continua funcionando.
+  // A vitória dura no máximo 45 s; o botão existente 'Trocar curso' continua funcionando.
   useEffect(() => {
-    if (game.phase !== 'finished') { setVictoryRemaining(60); setVictoryDeadline(null); return; }
-    const deadline = performance.now() + 60000;
+    if (game.phase !== 'finished') {
+      setVictoryRemaining(VICTORY_SECONDS);
+      setVictoryDeadline(null);
+      return;
+    }
+    const deadline = performance.now() + VICTORY_SECONDS * 1000;
     setVictoryDeadline(deadline);
     const interval = window.setInterval(() => {
       setVictoryRemaining(Math.max(0, Math.ceil((deadline - performance.now()) / 1000)));
     }, 250);
     const timeout = window.setTimeout(() => {
       if (useGame.getState().phase === 'finished') useGame.getState().restart(true);
-    }, 60000);
-    return () => { window.clearInterval(interval); window.clearTimeout(timeout); };
+    }, VICTORY_SECONDS * 1000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(timeout);
+    };
   }, [game.phase]);
 
-  // Apenas a faixa do questionário foi adicionada nesta etapa.
-  useEffect(() => { setQuizMusicActive(game.phase === 'question' && currentPlayer(game) === 0); }, [game.phase, game.turnIndex, game.order]);
-  // Música do menu: seleção e confirmação de curso; sem fade.
-  useEffect(() => { setMenuMusicActive(game.phase === 'choose' || game.phase === 'confirm'); }, [game.phase]);
+  // Um só controlador de música em todas as fases (incluindo WebXR).
+  // Robôs e turnos pulados nunca iniciam a música do questionário.
+  const musicContext: MusicContext = !sceneReady
+    ? null
+    : game.phase === 'choose' || game.phase === 'confirm'
+      ? 'menu'
+      : game.phase === 'question' && currentPlayer(game) === 0
+        ? 'question'
+        : null;
   useEffect(() => {
-    const unlock = () => { unlockQuizMusic(); unlockMenuMusic(); };
+    setBackgroundMusic(musicContext);
+  }, [musicContext]);
+  // Encerra de forma síncrona com a troca de fase do Zustand (inclusive
+  // timeout / perdeu a vez), antes mesmo do próximo render do React.
+  useEffect(
+    () =>
+      useGame.subscribe((next, previous) => {
+        if (
+          previous.phase === 'question' &&
+          next.phase !== 'question' &&
+          currentPlayer(previous) === 0
+        ) {
+          setBackgroundMusic(null);
+        }
+      }),
+    [],
+  );
+  useEffect(() => {
+    const unlock = () => unlockBackgroundMusic();
     window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('touchend', unlock, { passive: true });
     window.addEventListener('keydown', unlock);
     return () => {
       window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('touchend', unlock);
       window.removeEventListener('keydown', unlock);
-      disposeQuizMusic();
-      disposeMenuMusic();
+      disposeBackgroundMusic();
     };
   }, []);
-  const [questionRemaining, setQuestionRemaining] = useState(20);
+  const [questionRemaining, setQuestionRemaining] = useState(HUMAN_QUESTION_SECONDS);
   const [rollRemaining, setRollRemaining] = useState(15);
   const [timerDeadline, setTimerDeadline] = useState<{
     key: string;
@@ -380,19 +452,21 @@ function App() {
 
   useEffect(() => {
     if (game.phase !== 'question') {
-      setQuestionRemaining(20);
+      setQuestionRemaining(HUMAN_QUESTION_SECONDS);
       return;
     }
     const started = performance.now();
-    const botDelay = 7 + Math.random() * 4;
-    setQuestionRemaining(20);
+    const duration = player === 0 ? HUMAN_QUESTION_SECONDS : BOT_QUESTION_SECONDS;
+    // Os bots respondem em cerca de 5,5–9 s; prazo máximo exibido de 15 s.
+    const botDelay = 5.5 + Math.random() * 3.5;
+    setQuestionRemaining(duration);
     setTimerDeadline({
       key: `question-${game.turnIndex}-${game.activeQuestion?.id ?? ''}`,
-      deadline: started + 20000,
-      duration: 20,
+      deadline: started + duration * 1000,
+      duration,
     });
     const interval = window.setInterval(() => {
-      setQuestionRemaining(Math.max(0, Math.ceil(20 - (performance.now() - started) / 1000)));
+      setQuestionRemaining(Math.max(0, Math.ceil(duration - (performance.now() - started) / 1000)));
     }, 1000);
     const timeout = window.setTimeout(
       () => {
@@ -401,7 +475,7 @@ function App() {
         if (player === 0) state.answerQuestion(null);
         else state.answerBot(Math.random() < state.botAccuracy[player]);
       },
-      (player === 0 ? 20 : botDelay) * 1000,
+      (player === 0 ? HUMAN_QUESTION_SECONDS : botDelay) * 1000,
     );
     return () => {
       window.clearInterval(interval);
@@ -410,31 +484,37 @@ function App() {
   }, [game.phase, game.turnIndex, game.activeQuestion?.id, player]);
 
   const time =
-    game.phase === 'finished' ? victoryRemaining : remaining !== null
-      ? remaining
-      : game.phase === 'question'
-        ? questionRemaining
-        : game.phase === 'turn'
-          ? rollRemaining
-          : null;
+    game.phase === 'finished'
+      ? victoryRemaining
+      : remaining !== null
+        ? remaining
+        : game.phase === 'question'
+          ? questionRemaining
+          : game.phase === 'turn'
+            ? rollRemaining
+            : null;
   // Apenas a contagem numérica atualiza o React. A barra é animada pelo
   // compositor CSS, sem setState por quadro nem rerenderização da cena 3D.
   const timerDuration =
-    game.phase === 'finished' ? 60 : game.phase === 'lottery'
-      ? game.eligible[game.lotteryIndex] === 0
-        ? 10
-        : 1.2
-      : game.phase === 'question'
-        ? 20
-        : game.phase === 'turn'
+    game.phase === 'finished'
+      ? VICTORY_SECONDS
+      : game.phase === 'lottery'
+        ? game.eligible[game.lotteryIndex] === 0
+          ? 10
+          : 1.2
+        : game.phase === 'question'
           ? player === 0
-            ? 15
-            : 2.8
-          : game.phase === 'moving'
-            ? Math.max(4, Math.abs(game.movementTo - game.movementFrom) * 0.3 + 1.1)
-            : game.phase in AUTO_TIMES
-              ? AUTO_TIMES[game.phase as AutoPhase]
-              : 0;
+            ? HUMAN_QUESTION_SECONDS
+            : BOT_QUESTION_SECONDS
+          : game.phase === 'turn'
+            ? player === 0
+              ? 15
+              : 2.8
+            : game.phase === 'moving'
+              ? Math.max(4, Math.abs(game.movementTo - game.movementFrom) * 0.3 + 1.1)
+              : game.phase in AUTO_TIMES
+                ? AUTO_TIMES[game.phase as AutoPhase]
+                : 0;
   const timerKey = `${game.phase}-${game.turnIndex}-${game.lotteryIndex}-${game.lotteryNonce}-${game.throwNonce}-${game.activeQuestion?.id ?? ''}`;
   // The VR tablet reads the exact same clock as the desktop HUD.
   useEffect(() => {
@@ -444,7 +524,8 @@ function App() {
           phase: game.phase,
           seconds: time,
           duration: timerDuration,
-          deadline: game.phase === 'finished' ? victoryDeadline ?? undefined : timerDeadline?.deadline,
+          deadline:
+            game.phase === 'finished' ? (victoryDeadline ?? undefined) : timerDeadline?.deadline,
         },
       }),
     );
@@ -453,9 +534,20 @@ function App() {
   return (
     <div className="app" onClickCapture={uiClick} onMouseOver={uiHover}>
       <div className="world">
-        <StableWorld />
+        <StableWorld onSceneReady={onSceneReady} showDevTools={debugToolsReady} />
       </div>
       <div className="game-top-overlay" aria-hidden="true" />
+      {audioBlocked && (
+        <button
+          type="button"
+          className="audio-unlock"
+          onClick={unlockBackgroundMusic}
+          aria-label="Ativar música do SENAQUEST"
+        >
+          <span aria-hidden="true">🔊</span> Ativar música — o navegador bloqueou o início
+          automático
+        </button>
+      )}
       <header className="header">
         <div>
           <strong>
@@ -477,6 +569,17 @@ function App() {
         </button>
         {debugOpen && (
           <div className="settings-menu">
+            {(game.phase === 'choose' || game.phase === 'confirm') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDebugOpen(false);
+                  startTutorial('desktop');
+                }}
+              >
+                ◈ Como jogar · Tutorial
+              </button>
+            )}
             <button
               type="button"
               className="vr"
@@ -659,13 +762,15 @@ function App() {
             duration={timerDuration}
             seconds={time}
             deadline={
-              game.phase === 'finished' ? victoryDeadline ?? undefined : timerDeadline?.key === timerKey ||
-              (game.phase === 'turn' && timerDeadline?.key === `turn-${game.turnIndex}`) ||
-              (game.phase === 'question' &&
-                timerDeadline?.key ===
-                  `question-${game.turnIndex}-${game.activeQuestion?.id ?? ''}`)
-                ? timerDeadline?.deadline
-                : undefined
+              game.phase === 'finished'
+                ? (victoryDeadline ?? undefined)
+                : timerDeadline?.key === timerKey ||
+                    (game.phase === 'turn' && timerDeadline?.key === `turn-${game.turnIndex}`) ||
+                    (game.phase === 'question' &&
+                      timerDeadline?.key ===
+                        `question-${game.turnIndex}-${game.activeQuestion?.id ?? ''}`)
+                  ? timerDeadline?.deadline
+                  : undefined
             }
             caption={
               game.phase === 'question'
@@ -680,6 +785,14 @@ function App() {
           <>
             <h1>Bem-vindo ao SENAQUEST!</h1>
             <p>Escolha o curso da sua preferência.</p>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => startTutorial('desktop')}
+              style={{ marginBottom: 18 }}
+            >
+              ◈ Como jogar · Tutorial
+            </button>
             <div className="courses">
               {COURSE_IDS.map((course) => (
                 <button key={course} onClick={() => game.selectCourse(course)}>
@@ -801,7 +914,7 @@ function App() {
               </div>
             ) : (
               <div className="bot-thinking">
-                {NAMES[player]} está analisando a pergunta. O prazo total é de 20 segundos.
+                {NAMES[player]} está analisando a pergunta. O prazo total é de 15 segundos.
               </div>
             )}
           </div>
@@ -878,7 +991,52 @@ function App() {
         Versão demonstrativa • Questões sujeitas à revisão pedagógica • Controles VR em
         desenvolvimento
       </footer>
+      <DesktopTutorial />
     </div>
+  );
+}
+
+function App() {
+  const [assetsReady, setAssetsReady] = useState(false);
+  const [sceneReady, setSceneReady] = useState(false);
+  const [fading, setFading] = useState(false);
+  const [coverRemoved, setCoverRemoved] = useState(false);
+  const [sceneError, setSceneError] = useState<string | null>(null);
+  const markAssetsReady = useCallback(() => setAssetsReady(true), []);
+  const markSceneReady = useCallback(() => setSceneReady(true), []);
+  useEffect(() => {
+    if (!assetsReady || sceneReady) return;
+    const timeout = window.setTimeout(() => {
+      setSceneError('A cena 3D não ficou pronta. Verifique se WebGL está disponível.');
+    }, 30000);
+    return () => window.clearTimeout(timeout);
+  }, [assetsReady, sceneReady]);
+  useEffect(() => {
+    if (!assetsReady || !sceneReady) return;
+    setSceneError(null);
+    // Só inicia o fade quando a primeira imagem da cena já foi desenhada.
+    const frame = requestAnimationFrame(() => setFading(true));
+    return () => cancelAnimationFrame(frame);
+  }, [assetsReady, sceneReady]);
+  return (
+    <>
+      {assetsReady && (
+        <GameApp
+          onSceneReady={markSceneReady}
+          sceneReady={sceneReady}
+          debugToolsReady={coverRemoved}
+        />
+      )}
+      {!coverRemoved && (
+        <StartupLoading
+          onReady={markAssetsReady}
+          sceneReady={sceneReady}
+          sceneError={sceneError}
+          fading={fading}
+          onFadeEnd={() => setCoverRemoved(true)}
+        />
+      )}
+    </>
   );
 }
 

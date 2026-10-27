@@ -1,6 +1,7 @@
 import { POPPINS_3D } from './poppins';
 import { useEffect, useRef, useState } from 'react';
-import { RoundedBox, Text, Billboard } from '@react-three/drei';
+import { RoundedBox, Text } from '@react-three/drei';
+import { YawBillboard } from './YawBillboard';
 import { useFrame } from '@react-three/fiber';
 import {
   CuboidCollider,
@@ -416,10 +417,10 @@ function DieBody({
       </RigidBody>
       {displayedValue !== null && (
         <group ref={badge} position={[origin[0], origin[1] + 0.53, origin[2]]}>
-          <Billboard follow>
+          <YawBillboard>
             <group ref={badgeVisual}>
               {/* Contorno no mesmo formato do balão, sem alterar sua posição no mundo. */}
-              <mesh geometry={RESULT_BUBBLE_OUTLINE} renderOrder={9999} position={[0, 0, 0.001]}>
+              <mesh geometry={RESULT_BUBBLE_OUTLINE} renderOrder={80} position={[0, 0, 0.001]}>
                 <meshBasicMaterial
                   ref={bubbleBorder}
                   color={TOOLTIP.outlineColor}
@@ -431,7 +432,7 @@ function DieBody({
                   toneMapped={false}
                 />
               </mesh>
-              <mesh geometry={RESULT_BUBBLE} renderOrder={9999}>
+              <mesh geometry={RESULT_BUBBLE} renderOrder={81}>
                 <meshBasicMaterial
                   ref={bubbleFill}
                   color={TOOLTIP.fillColor}
@@ -445,7 +446,7 @@ function DieBody({
               </mesh>
               <Text
                 font={POPPINS_3D}
-                renderOrder={9999}
+                renderOrder={82}
                 position={[0, 0, 0.012]}
                 fontSize={0.28}
                 color="#ffffff"
@@ -457,7 +458,7 @@ function DieBody({
                 {displayedValue}
               </Text>
             </group>
-          </Billboard>
+          </YawBillboard>
         </group>
       )}
       {debug && (

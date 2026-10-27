@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import { COURSES, CourseId, NAMES, QUESTION_BANK, BankQuestion, colorIndex } from './data';
-import { determineWinner, resolveMove, turnOrder, SPECIAL_SQUARES } from './rules';
+import {
+  determineWinner,
+  resolveMove,
+  turnOrder,
+  SPECIAL_SQUARES,
+  SPECIAL_SQUARE_DESCRIPTIONS,
+} from './rules';
 import { shuffledPositions, shuffleQuestion } from './quizShuffle';
 export type Phase =
   | 'choose'
@@ -330,7 +336,7 @@ export const useGame = create<State>((set, get) => ({
       activeQuestion: question,
       answerPositions: positions,
       usedQuestionIds: [...s.usedQuestionIds, question.id],
-      seconds: 20,
+      seconds: id === 0 ? 20 : 15,
       rollSeconds: 15,
       thrower: null,
       throwNonce: 0,
@@ -447,7 +453,9 @@ export const useGame = create<State>((set, get) => ({
           }
         : { ...entry },
     );
-    let eventMessage = event ? ` Evento: casa ${result.moved}.` : '';
+    let eventMessage = event
+      ? ` CASA ${result.moved} — ${SPECIAL_SQUARE_DESCRIPTIONS[result.moved]}`
+      : '';
     if (event?.swapLast && !immuneBlocked) {
       const minimum = Math.min(...players.map((entry) => entry.position));
       const last = players
@@ -457,10 +465,13 @@ export const useGame = create<State>((set, get) => ({
         const other = last[0].i;
         players[other].position = result.moved;
         players[id].position = minimum;
-        eventMessage = ` Portal do azar: troca com ${NAMES[other]}.`;
-      } else eventMessage = ' Portal do azar: sem troca por empate ou último lugar.';
+        eventMessage = ` CASA 17 — Portal do azar: trocou de posição com ${NAMES[other]}.`;
+      } else
+        eventMessage =
+          ' CASA 17 — Portal do azar: sem troca por empate na última posição ou porque você já está em último.';
     }
-    if (immuneBlocked) eventMessage = ' Imunidade consumida: malefício anulado.';
+    if (immuneBlocked)
+      eventMessage = ` CASA ${result.moved} — Imunidade consumida: malefício anulado integralmente.`;
     set({
       players,
       phase: 'moving',
