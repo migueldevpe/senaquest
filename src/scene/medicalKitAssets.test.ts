@@ -17,6 +17,6 @@ describe('Kit de primeiros socorros no setor Saúde', () => {
     expect(placement.maxDimensions).toHaveLength(3);
     expect(placement.maxDimensions.every((v) => Number.isFinite(v) && v > 0)).toBe(true);
     expect(Number.isFinite(placement.rotationY)).toBe(true);
-    expect(MODEL_PLACEMENTS.mesa.position).toEqual([0.3, 0.005, 7.25]);
+    expect(MODEL_PLACEMENTS.mesa_medicina.position).toEqual([0.3, 0.005, 7.25]);
   });
 });

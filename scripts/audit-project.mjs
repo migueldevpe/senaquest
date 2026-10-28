@@ -30,7 +30,11 @@ function walk(dir, ext) {
 }
 
 const cssFiles = walk(path.join(root, 'src'), '.css');
-if (cssFiles.length !== 1 || path.relative(root, cssFiles[0] ?? '') !== 'src/style.css') {
+const cssRelativePath = path
+  .relative(root, cssFiles[0] ?? '')
+  .split(path.sep)
+  .join('/');
+if (cssFiles.length !== 1 || cssRelativePath !== 'src/style.css') {
   failures.push('CSS disperso: somente src/style.css deve existir.');
 }
 
@@ -48,14 +52,36 @@ if (!entry.includes("import './style.css';") && !entry.includes('import "./style
 }
 
 const manifest = fs.readFileSync(path.join(root, 'src/scene/preloadManifest.ts'), 'utf8');
-const assetPaths = [...manifest.matchAll(/["'](\/(?:models|audio|tutorial)\/[^"'\n]+)["']/g)].map(
-  (match) => match[1],
-);
+const assetPaths = [
+  ...manifest.matchAll(/["'](\/(?:branding|models|audio|tutorial)\/[^"'\n]+)["']/g),
+].map((match) => match[1]);
 if (assetPaths.length === 0) failures.push('Manifesto de preload vazio');
 for (const url of assetPaths) {
   const filepath = path.join(root, 'public', url.slice(1));
   if (!fs.existsSync(filepath)) failures.push(`Asset do preload ausente: ${url}`);
   else if (fs.statSync(filepath).size === 0) failures.push(`Asset vazio: ${url}`);
+  else if (url.endsWith('.opus')) {
+    const header = fs.readFileSync(filepath).subarray(0, 64);
+    if (header.toString('ascii', 0, 4) !== 'OggS' || !header.includes(Buffer.from('OpusHead'))) {
+      failures.push(`Audio Opus inválido: ${url}`);
+    }
+  }
+}
+
+const music = fs.readFileSync(path.join(root, 'src/game/backgroundMusic.ts'), 'utf8');
+const compatibilityPaths = [...music.matchAll(/["'](\/audio\/compat\/[^"'\n]+\.mp3)["']/g)].map(
+  (match) => match[1],
+);
+if (compatibilityPaths.length !== 5) failures.push('Fallbacks de áudio MP3 incompletos');
+for (const url of compatibilityPaths) {
+  const filepath = path.join(root, 'public', url.slice(1));
+  if (!fs.existsSync(filepath)) failures.push(`Fallback de áudio ausente: ${url}`);
+  else {
+    const header = fs.readFileSync(filepath).subarray(0, 2);
+    if (header[0] !== 0xff || (header[1] & 0xe0) !== 0xe0) {
+      failures.push(`Fallback MP3 inválido: ${url}`);
+    }
+  }
 }
 
 const techAssets = [
@@ -85,7 +111,7 @@ for (const file of webps) {
 }
 
 console.log(
-  `SENAQUEST: ${assetPaths.length} recursos verificados; ${webps.length} WebP; CSS centralizado.`,
+  `SENAQUEST: ${assetPaths.length} recursos do preload e ${compatibilityPaths.length} fallbacks de áudio verificados; ${webps.length} WebP; CSS centralizado.`,
 );
 if (failures.length) {
   console.error(failures.map((message) => `ERRO: ${message}`).join('\n'));

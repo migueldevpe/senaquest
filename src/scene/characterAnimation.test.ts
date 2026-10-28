@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { CHARACTER_ANIMATION, victoryPunchEnvelope, victoryPunchSway } from './characterAnimation';
+import {
+  CHARACTER_ANIMATION,
+  VICTORY_ARM_POSE,
+  victoryPunchEnvelope,
+  victoryPunchSway,
+} from './characterAnimation';
 
 describe('soquinho de vitória', () => {
   const total =
@@ -21,5 +26,23 @@ describe('soquinho de vitória', () => {
         CHARACTER_ANIMATION.punchSwayAmplitude + 1e-8,
       );
     }
+  });
+});
+
+describe('pose de vitória com cotovelos dobrados', () => {
+  const dot = (a: { lateral: number; vertical: number; forward: number }, b: typeof a) =>
+    a.lateral * b.lateral + a.vertical * b.vertical + a.forward * b.forward;
+
+  it('abre os braços para fora e dobra os antebraços para dentro', () => {
+    for (const side of ['left', 'right'] as const) {
+      const pose = VICTORY_ARM_POSE[side];
+      expect(Math.abs(pose.upperArm.lateral)).toBeGreaterThan(pose.upperArm.vertical);
+      expect(pose.forearm.vertical).toBeGreaterThan(Math.abs(pose.forearm.lateral));
+      expect(Math.abs(dot(pose.upperArm, pose.forearm))).toBeLessThan(0.08);
+    }
+    expect(VICTORY_ARM_POSE.left.upperArm.lateral).toBeLessThan(0);
+    expect(VICTORY_ARM_POSE.right.upperArm.lateral).toBeGreaterThan(0);
+    expect(VICTORY_ARM_POSE.left.forearm.lateral).toBeGreaterThan(0);
+    expect(VICTORY_ARM_POSE.right.forearm.lateral).toBeLessThan(0);
   });
 });

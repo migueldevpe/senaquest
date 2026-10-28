@@ -9,6 +9,7 @@ export function XRMusicUnlock() {
     let session: XRSession | null = null;
     const unlock = () => unlockBackgroundMusic();
     const detach = () => {
+      if (!session) return;
       session?.removeEventListener('select', unlock);
       session?.removeEventListener('squeeze', unlock);
       session = null;

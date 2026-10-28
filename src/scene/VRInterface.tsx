@@ -2,7 +2,7 @@ import { loadPoppinsCanvas } from './poppins';
 import { POPPINS_3D } from './poppins';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { useFrame, useThree } from '@react-three/fiber';
+import { useFrame, useLoader, useThree } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { COURSES, NAMES } from '../game/data';
@@ -242,7 +242,7 @@ function VisorHUD({
         // Preserve the artwork, horizontal right alignment and readable margins.
         // Center the actual classification panel, NOT the whole transparent canvas,
         // vertically on the Quest HUD regardless of headset FOV.
-        const safeRight = HUD_DISTANCE * Math.tan(horizontal / 2) * 0.88;
+        const safeRight = HUD_DISTANCE * Math.tan(horizontal / 2) * 0.85;
         const safeHalfHeight = HUD_DISTANCE * Math.tan(vertical / 2) * 0.83;
         const rightEdge = (2019 / HUD_W - 0.5) * HUD_PLANE_W;
         const panelCenterY = 0; // o desenho já está centralizado no canvas
@@ -352,11 +352,18 @@ function TableEdgeTablet({
 }
 
 function BotScreen({ name }: { name: string }) {
+  const loadedLogo = useLoader(THREE.TextureLoader, '/branding/senaquest-logo-outline.webp');
+  const logo = useMemo(() => {
+    loadedLogo.colorSpace = THREE.SRGBColorSpace;
+    loadedLogo.anisotropy = 4;
+    loadedLogo.needsUpdate = true;
+    return loadedLogo;
+  }, [loadedLogo]);
   return (
     <group position={[0, 0, -0.025]} rotation={[0, Math.PI, 0]}>
       <Text
         font={POPPINS_3D}
-        position={[0, 0.235, 0]}
+        position={[0, 0.25, 0]}
         fontSize={0.063}
         anchorX="center"
         anchorY="middle"
@@ -365,20 +372,19 @@ function BotScreen({ name }: { name: string }) {
       >
         {name}
       </Text>
+      <mesh position={[0, 0.125, 0.001]} renderOrder={2}>
+        <planeGeometry args={[0.31, 0.117]} />
+        <meshBasicMaterial
+          map={logo}
+          transparent
+          alphaTest={0.01}
+          depthWrite={false}
+          toneMapped={false}
+        />
+      </mesh>
       <Text
         font={POPPINS_3D}
-        position={[0, 0.142, 0]}
-        fontSize={0.058}
-        anchorX="center"
-        anchorY="middle"
-        textAlign="center"
-        color="#ffb34c"
-      >
-        SENAQUEST
-      </Text>
-      <Text
-        font={POPPINS_3D}
-        position={[0, 0.072, 0]}
+        position={[0, 0, 0]}
         fontSize={0.028}
         anchorX="center"
         anchorY="middle"

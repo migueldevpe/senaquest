@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
-import { administrationExhibitX, ROOM_INNER_FACE, ROOM_WALL } from './roomWallPlacement';
+import { AdministrationRackContents } from './AdministrationDeskItems';
+import { MODEL_PLACEMENTS } from './modelPlacements';
+import { ROOM_INNER_FACE, ROOM_WALL } from './roomWallPlacement';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   LOCAL_SECTOR_ASSET_BASE,
-  SECTOR_ADMIN_ASSETS,
   SECTOR_ASSET_FILES,
   SECTOR_FALLBACK_COLORS,
   SECTOR_SHELF_ASSETS,
@@ -16,6 +17,34 @@ import {
 // Download único por modelo, mesmo se o objeto estiver em vários expositores.
 const cachedScenes = new Map<string, Promise<THREE.Group | null>>();
 let localFilesPromise: Promise<Set<string>> | undefined;
+
+const ADMINISTRATION_WOOD_TEXTURE = '/textures/administration-wood.webp';
+let administrationWoodPromise: Promise<THREE.Texture> | null = null;
+
+function preloadAdministrationWoodTexture(): Promise<THREE.Texture> {
+  if (!administrationWoodPromise) {
+    administrationWoodPromise = new Promise<THREE.Texture>((resolve, reject) => {
+      new THREE.TextureLoader().load(
+        ADMINISTRATION_WOOD_TEXTURE,
+        (texture) => {
+          texture.colorSpace = THREE.SRGBColorSpace;
+          texture.wrapS = THREE.RepeatWrapping;
+          texture.wrapT = THREE.RepeatWrapping;
+          texture.repeat.set(2, 1);
+          texture.anisotropy = 4;
+          texture.needsUpdate = true;
+          resolve(texture);
+        },
+        undefined,
+        reject,
+      );
+    }).catch((error: unknown) => {
+      administrationWoodPromise = null;
+      throw error;
+    });
+  }
+  return administrationWoodPromise;
+}
 
 function availableLocalFiles(): Promise<Set<string>> {
   if (!localFilesPromise) {
@@ -240,32 +269,49 @@ export function SectorShelfDecor({ sector }: { sector: 'technology' | 'logistics
 
 /** Expositor raso na região de Administração. Não cria novas estantes no ambiente. */
 export function AdministrationWallDecor() {
+  const [woodTexture, setWoodTexture] = useState<THREE.Texture | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    void preloadAdministrationWoodTexture()
+      .then((texture) => {
+        if (mounted) setWoodTexture(texture);
+      })
+      .catch((error: unknown) => {
+        console.warn('[SENAQUEST] Textura amadeirada de Administração:', error);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <group
-      position={[administrationExhibitX(), 1.55, 0]}
-      rotation={[0, Math.PI / 2, 0]}
+      position={MODEL_PLACEMENTS.administration_rack.position}
+      rotation={[0, MODEL_PLACEMENTS.administration_rack.rotationY, 0]}
       name="temp-sector-exhibit-administration"
     >
       <mesh position={[0, 0, -0.04]}>
         <boxGeometry args={[4.25, 1.57, 0.075]} />
-        <meshStandardMaterial color="#6c5382" roughness={0.87} />
+        <meshStandardMaterial
+          map={woodTexture ?? undefined}
+          color={woodTexture ? '#ffffff' : '#9a7049'}
+          roughness={0.9}
+          metalness={0}
+        />
       </mesh>
-      {/* Apoios rasos apenas dentro do próprio expositor temporário. */}
+      {/* Apoios amadeirados, com o mesmo veio horizontal do painel. */}
       {[-0.7, 0.06].map((y) => (
         <mesh key={y} position={[0, y, 0.13]}>
           <boxGeometry args={[4.05, 0.045, 0.31]} />
-          <meshStandardMaterial color="#8c72a2" roughness={0.85} />
+          <meshStandardMaterial
+            map={woodTexture ?? undefined}
+            color={woodTexture ? '#ffffff' : '#9a7049'}
+            roughness={0.9}
+            metalness={0}
+          />
         </mesh>
       ))}
-      {SECTOR_ADMIN_ASSETS.map((asset, index) => (
-        <AssetOnDisplay
-          key={`administration-${index}`}
-          sector="administration"
-          asset={asset}
-          position={[-1.56 + (index % 4) * 1.04, -0.68 + Math.floor(index / 4) * 0.76, 0.14]}
-          maxSize={[0.65, 0.6, 0.2]}
-        />
-      ))}
+      <AdministrationRackContents />
     </group>
   );
 }
@@ -306,4 +352,5 @@ export async function preloadSectorDecor(): Promise<void> {
       }
     }),
   );
+  await preloadAdministrationWoodTexture();
 }

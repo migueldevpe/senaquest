@@ -8,6 +8,11 @@ import { loadPoppinsCanvas } from './poppins';
 import { preloadSectorDecor } from './SectorDecor';
 import { preloadCeilingFixtures } from './CeilingLightFixtures';
 import { preloadLogisticsShelf } from './LogisticsShelfModel';
+import { preloadCashRegister } from './LogisticsCashRegisterModel';
+import { preloadLogisticsPaymentTerminal } from './LogisticsPaymentTerminal';
+import { preloadLogisticsBoxes } from './LogisticsBoxesModel';
+import { preloadAdministrationPrinter } from './AdministrationPrinterAndImac';
+import { preloadAdministrationDeskItems } from './AdministrationDeskItems';
 import { preloadTechnologyModels, preloadTechnologyAccessories } from './technology';
 
 const CORE_FBX = [
@@ -18,9 +23,10 @@ const CORE_FBX = [
   '/models/claudinha.fbx',
   '/models/crownwin.fbx',
 ] as const;
-const HEALTH_FBX_COUNT = 8; // 3 modelos iniciais + 5 acessórios definitivos.
+const HEALTH_PRELOAD_COUNT = 8;
+const ADDITIONAL_PRELOAD_STEPS = 14;
 const ASSET_TOTAL =
-  REQUIRED_ASSETS.length + CORE_FBX.length + HEALTH_FBX_COUNT + 2 + 1 + 1 + 1 + 1 + 1 + 1;
+  REQUIRED_ASSETS.length + CORE_FBX.length + HEALTH_PRELOAD_COUNT + ADDITIONAL_PRELOAD_STEPS;
 const TOTAL = ASSET_TOTAL + 1; // 1 etapa final: a cena WebGL desenhada.
 type Progress = { completed: number; description: string; error: string | null };
 const initialProgress: Progress = {
@@ -38,11 +44,12 @@ async function fetchAndCheck(url: string): Promise<void> {
     const bitmap = await createImageBitmap(bytes);
     bitmap.close();
   }
-  // Arquivos de áudio Opus estão pré-baixados, mas podem precisar de gesto
+  // Faixas Opus ficam pré-carregadas, mas podem precisar de gesto
   // humano para iniciar a reprodução conforme política do navegador.
 }
 
 async function preloadEverything(report: (description: string) => void) {
+  const dicePhysicsPromise = import('./Dice');
   THREE.Cache.enabled = true;
   let index = 0;
   async function worker() {
@@ -60,7 +67,7 @@ async function preloadEverything(report: (description: string) => void) {
   }
   await preloadHealthSectorModels();
   for (const id of [
-    'mesa',
+    'mesa_medicina',
     'maca',
     'trolley',
     'iv_pole',
@@ -71,14 +78,24 @@ async function preloadEverything(report: (description: string) => void) {
   ]) {
     report(`Saúde: ${id}`);
   }
-  if (!(await preloadMedicalDesk())) throw new Error('Mesa de Medicina não pôde ser carregada');
-  report('Mesa de Medicina');
+  if (!(await preloadMedicalDesk())) throw new Error('Mesa não pôde ser carregada');
+  report('Mesa');
   if (!(await preloadMedicalImac())) throw new Error('iMac não pôde ser carregado');
   report('iMac');
   await preloadCeilingFixtures();
   report('Luminárias de teto');
   await preloadLogisticsShelf();
   report('Estante definitiva de Logística e Vendas');
+  await preloadCashRegister();
+  report('Caixa registradora de Logística e Vendas');
+  await preloadLogisticsPaymentTerminal();
+  report('Terminal de pagamento de Logística e Vendas');
+  await preloadAdministrationPrinter();
+  report('Impressora de Administração');
+  await preloadAdministrationDeskItems();
+  report('Materiais da mesa de Administração');
+  await preloadLogisticsBoxes();
+  report('Boxes de Logística e Vendas');
   await preloadTechnologyModels();
   report('Óculos VR e servidores de TI');
   await preloadTechnologyAccessories();
@@ -87,6 +104,8 @@ async function preloadEverything(report: (description: string) => void) {
   report('Decoração local preparada');
   await loadPoppinsCanvas();
   report('Fontes da interface');
+  await dicePhysicsPromise;
+  report('Física dos dados');
 }
 
 // Um carregamento em todo o app, inclusive no React.StrictMode.
@@ -170,9 +189,7 @@ export function StartupLoading({
       }}
     >
       <section className="startup-card">
-        <h1>
-          SENA<span>QUEST</span>
-        </h1>
+        <img className="startup-logo" src="/branding/senaquest-logo-outline.webp" alt="SenaQuest" />
         <p>PREPARANDO SUA JORNADA</p>
         <div className="startup-progress-row">
           <strong>

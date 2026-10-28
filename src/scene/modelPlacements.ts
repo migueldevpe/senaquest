@@ -32,19 +32,9 @@ export const MODEL_PLACEMENTS = {
     rotationY: 0,
     maxDimensions: [2.3, 2.55, 0.5],
   },
-  health_shelf: {
-    position: [6.15, 1.3, 7.15],
-    rotationY: Math.PI,
-    maxDimensions: [2.3, 2.55, 0.5],
-  },
   // Estante definitiva shelfvendas.fbx.
   // X é a FACE TRASEIRA, encostada à parede direita (não o centro do móvel).
   // Y é a base do móvel, junto ao piso. Z é o centro ao longo da parede.
-  logistics_shelf: {
-    position: [7.905, 0.005, 4.5],
-    rotationY: -Math.PI / 2,
-    maxDimensions: [2.3, 2.55, 0.5],
-  },
   // Cadeira extra do setor Saúde, reaproveitando o mesmo FBX das cadeiras dos players.
   cadeira_mesa_saude: {
     position: [2.6, 0, 6.45],
@@ -62,19 +52,20 @@ export const MODEL_PLACEMENTS = {
   ceiling_light_4: { position: [4, 5.15, 4], rotationY: 0, maxDimensions: [2.6, 0.6, 0.55] },
 
   // === ADMINISTRAÇÃO EM SAÚDE / MEDICINA ===
-  // Todos estes três usam coordenadas ABSOLUTAS da sala.
-  mesa: { position: [0.3, 0.005, 7.25], rotationY: 4.7125, maxDimensions: [2.5, 2.1, 2.6] },
+  // Os nomes foram corrigidos sem alterar a geometria nem a posição dos modelos.
+  // 'mesa' identifica o modelo com iMac; o arquivo foi renomeado sem alterar a malha.
+  mesa: { position: [3.1, 0.005, 7.35], rotationY: Math.PI, maxDimensions: [2.2, 1.3, 2] },
   maca: { position: [-2, 0.005, 5.85], rotationY: Math.PI / 2, maxDimensions: [3.85, 4.725, 3.51] },
   trolley: { position: [-3.5, 0.005, 6.25], rotationY: 2.75, maxDimensions: [1, 1.3, 1.03] },
 
-  // Mesa de Medicina: coordenadas ABSOLUTAS da sala.
+  // 'mesa_medicina' identifica o modelo anteriormente registrado como 'mesa'.
   mesa_medicina: {
-    position: [3.1, 0.005, 7.35],
-    rotationY: Math.PI,
-    maxDimensions: [2.2, 1.3, 2],
+    position: [0.3, 0.005, 7.25],
+    rotationY: 4.7125,
+    maxDimensions: [2.5, 2.1, 2.6],
   },
 
-  // iMac: position é LOCAL ao TAMPO da mesa de Medicina (não ao piso da sala).
+  // iMac: position é LOCAL ao TAMPO da mesa (não ao piso da sala).
   // X/Z são relativos ao centro da mesa; Y é a distância ACIMA do tampo.
   // rotationY é relativa à rotação da própria mesa. Isto mantém o iMac apoiado
   // automaticamente se a mesa mudar de posição, escala ou orientação.
@@ -198,15 +189,199 @@ export const MODEL_PLACEMENTS = {
   },
 
   // === ADMINISTRAÇÃO ===
-  // Os próximos modelos definitivos de Administração serão inseridos aqui.
+  // Usa o outro modelo de mesa (mesa.fbx), voltado para o centro da sala.
+  administration_table: {
+    position: [-7.4, 0.005, -1.5],
+    rotationY: Math.PI / 2,
+    maxDimensions: [2.5, 2.1, 2.6],
+  },
+  // Rack decorativo da parede: sua posição/rotação são absolutas; o conteúdo usa
+  // posições locais relativas a este grupo para facilitar o ajuste das prateleiras.
+  administration_chair: {
+    position: [-6.45, 0, -2.25],
+    rotationY: -Math.PI / 2 + 0.25,
+    maxDimensions: [1.55, 1.9, 1.55],
+  },
+  administration_rack: {
+    position: [-7.8275, 1.55, 2.125],
+    rotationY: Math.PI / 2,
+    maxDimensions: [4.25, 1.57, 0.31],
+  },
+  administration_rack_document_holder_1: {
+    position: [-1.68, -0.665, 0.13],
+    rotationY: Math.PI / 2 - 0.1,
+    maxDimensions: [0.84, 1.35, 0.6],
+  },
+  administration_rack_document_holder_2: {
+    position: [-1.08, -0.665, 0.13],
+    rotationY: Math.PI / 2 + 0.2,
+    maxDimensions: [0.84, 1.35, 0.6],
+  },
+  administration_rack_document_holder_3: {
+    position: [-0.48, -0.665, 0.13],
+    rotationY: Math.PI / 2 + 0.3,
+    maxDimensions: [0.84, 1.35, 0.6],
+  },
+  administration_rack_document_holder_4: {
+    position: [0.48, 0.095, 0.13],
+    rotationY: Math.PI / 2 + 0.3,
+    maxDimensions: [0.84, 1.35, 0.6],
+  },
+  administration_rack_document_holder_5: {
+    position: [1.08, 0.095, 0.13],
+    rotationY: Math.PI / 2 - 0.1,
+    maxDimensions: [0.84, 1.35, 0.6],
+  },
+  administration_rack_document_holder_6: {
+    position: [1.68, 0.095, 0.13],
+    rotationY: Math.PI / 2 + 0.2,
+    maxDimensions: [0.84, 1.35, 0.6],
+  },
+  administration_rack_book_1: {
+    position: [0.25, -0.665, 0.13],
+    rotationY: -0.08,
+    maxDimensions: [0.5, 0.6, 0.4],
+  },
+  administration_rack_book_2: {
+    position: [0.5, -0.665, 0.13],
+    rotationY: 0.1,
+    maxDimensions: [0.5, 0.6, 0.4],
+  },
+  administration_rack_book_3: {
+    position: [0.75, -0.665, 0.13],
+    rotationY: -0.04,
+    maxDimensions: [0.5, 0.6, 0.4],
+  },
+  administration_rack_book_4: {
+    position: [-1.75, 0.095, 0.13],
+    rotationY: 0.08,
+    maxDimensions: [0.5, 0.6, 0.4],
+  },
+  administration_rack_book_5: {
+    position: [-1.5, 0.095, 0.13],
+    rotationY: -0.12,
+    maxDimensions: [0.5, 0.6, 0.4],
+  },
+  administration_rack_book_6: {
+    position: [-1.25, 0.095, 0.13],
+    rotationY: 0.04,
+    maxDimensions: [0.5, 0.6, 0.4],
+  },
+  administration_whiteboard: {
+    position: [-7.86, 2.75, -5],
+    rotationY: Math.PI / 2,
+    maxDimensions: [2.6, 1.32, 0.16],
+  },
+  administration_printer: {
+    position: [-8.2, 0.01, -0.8],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [0.96, 0.76, 0.6],
+  },
+  administration_imac: {
+    position: [-7.4, 0.01, -1.85],
+    rotationY: Math.PI / 2,
+    maxDimensions: [1.42, 1.36, 0.6],
+  },
+  administration_telephone: {
+    position: [-6.55, 0.01, -2.4],
+    rotationY: 0,
+    maxDimensions: [0.38, 0.28, 0.32],
+  },
+  administration_paper_stack: {
+    position: [-6.7, 0.01, -1.2],
+    rotationY: Math.PI / 2,
+    maxDimensions: [0.7, 0.3, 0.54],
+  },
+  administration_stack_of_paper: {
+    position: [-8.15, 0.01, -2.15],
+    rotationY: Math.PI / 2,
+    maxDimensions: [0.8, 0.1, 0.6],
+  },
 
   // === LOGÍSTICA E VENDAS ===
-  // Os próximos modelos definitivos de Logística e Vendas serão inseridos aqui.
+  logistics_whiteboard: {
+    position: [7.84, 2.75, -5],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [2.6, 1.32, 0.16],
+  },
+  // Usa mesa_medicina.fbx, a mesa metálica com prateleira inferior.
+  logistics_table: {
+    position: [7.35, 0.005, -1.75],
+    rotationY: 0,
+    maxDimensions: [2.5, 2.1, 2.6],
+  },
+  logistics_shelf: {
+    position: [7.905, 0.00475, 2.25],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [3, 3.25, 1.2],
+  },
+  // Caixa registradora sobre o tampo da mesa de logística. X/Z são absolutos;
+  // Y é um pequeno afastamento acima do tampo, calculado pela altura real do FBX.
+  logistics_cash_register: {
+    position: [7.325, -0.0625, -0.85],
+    rotationY: -Math.PI,
+    maxDimensions: [0.82, 0.56, 0.62],
+  },
+  logistics_payment_terminal: {
+    position: [7.1, -0.0625, -1.3],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [0.28, 0.3, 0.24],
+  },
+  // Conjunto de boxes reposicionado dentro de Logística, longe do setor de Saúde.
+  logistics_boxes_stack: {
+    position: [7, 0.005, 0.1],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [1.75, 1.75, 1.75],
+  },
+  // Quatro caixas individuais alinhadas no nível intermediário da estante.
+  logistics_box_single: {
+    position: [7.5, 2.15, 3.35],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [0.44, 0.44, 0.44],
+  },
+  logistics_box_shelf_2: {
+    position: [7.65, 1.475, 1.25],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [0.44, 0.44, 0.44],
+  },
+  logistics_box_shelf_3: {
+    position: [7.5, 0.825, 2.5],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [0.44, 0.44, 0.44],
+  },
+  logistics_box_shelf_4: {
+    position: [7.65, 0.15, 1.75],
+    rotationY: -Math.PI / 2,
+    maxDimensions: [0.44, 0.44, 0.44],
+  },
+  // Três caixas apoiadas na prateleira inferior da mesa de Logística e Vendas.
+  logistics_box_under_table_1: {
+    position: [7.5, 1.15, -1.75],
+    rotationY: -12,
+    maxDimensions: [0.44, 0.44, 0.44],
+  },
+  logistics_box_under_table_2: {
+    position: [7.25, 1.15, -2.25],
+    rotationY: 12,
+    maxDimensions: [0.44, 0.44, 0.44],
+  },
+  logistics_box_under_table_3: {
+    position: [7.25, 0.2, -1.5],
+    rotationY: 0,
+    maxDimensions: [0.44, 0.44, 0.44],
+  },
 } satisfies Record<string, ModelPlacement>;
 
 export type UserModelId = keyof typeof MODEL_PLACEMENTS;
 /** Os três FBX do conjunto original de Saúde (pastas individuais). */
 export type HealthModelId =
-  'mesa' | 'maca' | 'trolley' | 'iv_pole' | 'trash' | 'glove_box' | 'defibrillator' | 'medical_kit';
+  | 'mesa_medicina'
+  | 'maca'
+  | 'trolley'
+  | 'iv_pole'
+  | 'trash'
+  | 'glove_box'
+  | 'defibrillator'
+  | 'medical_kit';
 /** Compatibilidade com o identificador que já era usado em HealthSectorModels. */
 export const HEALTH_MODEL_PLACEMENTS = MODEL_PLACEMENTS;

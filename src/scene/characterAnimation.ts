@@ -7,6 +7,22 @@ export const CHARACTER_ANIMATION = {
   punchSwayHz: 2.0,
 } as const;
 
+/**
+ * Direções da pose de vitória no referencial do personagem:
+ * [lateral, vertical, frente]. Os braços abrem para os lados e os antebraços
+ * voltam para dentro, formando um cotovelo dobrado em vez de dois braços retos.
+ */
+export const VICTORY_ARM_POSE = {
+  left: {
+    upperArm: { lateral: -0.82, vertical: 0.38, forward: 0.1 },
+    forearm: { lateral: 0.42, vertical: 0.82, forward: 0.12 },
+  },
+  right: {
+    upperArm: { lateral: 0.82, vertical: 0.38, forward: 0.1 },
+    forearm: { lateral: -0.42, vertical: 0.82, forward: 0.12 },
+  },
+} as const;
+
 const smooth = (t: number) => {
   const x = Math.max(0, Math.min(1, t));
   return x * x * (3 - 2 * x);

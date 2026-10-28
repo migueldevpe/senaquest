@@ -79,18 +79,6 @@ export const SECTOR_SHELF_ASSETS: Record<
   ],
 } as const;
 
-/** 2 linhas x 4 objetos no painel decorativo já previsto. */
-export const SECTOR_ADMIN_ASSETS: readonly SectorAssetId[] = [
-  'books',
-  'laptop',
-  'mouse',
-  'drawers',
-  'screen',
-  'keyboard',
-  'smallSpeaker',
-  'pottedPlant',
-] as const;
-
 /** Acessórios pequenos na bancada atual de Tecnologia. */
 export const SECTOR_WORKTOP_ASSETS: readonly SectorAssetId[] = [
   'keyboard',

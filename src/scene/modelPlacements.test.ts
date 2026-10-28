@@ -5,8 +5,6 @@ describe('Cadastro unificado de modelos definitivos', () => {
   it('contém os elementos padronizados de sala e mantém as posições acordadas', () => {
     expect(Object.keys(MODEL_PLACEMENTS)).toEqual([
       'technology_shelf',
-      'health_shelf',
-      'logistics_shelf',
       'cadeira_mesa_saude',
       'ceiling_light_1',
       'ceiling_light_2',
@@ -36,6 +34,40 @@ describe('Cadastro unificado de modelos definitivos', () => {
       'technology_pc_2',
       'technology_pc_3',
       'technology_keyboard',
+      'administration_table',
+      'administration_chair',
+      'administration_rack',
+      'administration_rack_document_holder_1',
+      'administration_rack_document_holder_2',
+      'administration_rack_document_holder_3',
+      'administration_rack_document_holder_4',
+      'administration_rack_document_holder_5',
+      'administration_rack_document_holder_6',
+      'administration_rack_book_1',
+      'administration_rack_book_2',
+      'administration_rack_book_3',
+      'administration_rack_book_4',
+      'administration_rack_book_5',
+      'administration_rack_book_6',
+      'administration_whiteboard',
+      'administration_printer',
+      'administration_imac',
+      'administration_telephone',
+      'administration_paper_stack',
+      'administration_stack_of_paper',
+      'logistics_whiteboard',
+      'logistics_table',
+      'logistics_shelf',
+      'logistics_cash_register',
+      'logistics_payment_terminal',
+      'logistics_boxes_stack',
+      'logistics_box_single',
+      'logistics_box_shelf_2',
+      'logistics_box_shelf_3',
+      'logistics_box_shelf_4',
+      'logistics_box_under_table_1',
+      'logistics_box_under_table_2',
+      'logistics_box_under_table_3',
     ]);
     expect(MODEL_PLACEMENTS.technology_vr_1).toEqual({
       position: [-2.15, 1.375, -7.5],
@@ -89,17 +121,17 @@ describe('Cadastro unificado de modelos definitivos', () => {
     });
     expect(MODEL_PLACEMENTS.technology_pc_1).toEqual({
       position: [-5.0, 0.005, -7.65],
-      rotationY: 0,
+      rotationY: Math.PI,
       maxDimensions: [0.88, 0.74, 0.66],
     });
     expect(MODEL_PLACEMENTS.technology_pc_2).toEqual({
       position: [-4.25, 0.005, -7.65],
-      rotationY: 0,
+      rotationY: Math.PI,
       maxDimensions: [0.88, 0.74, 0.66],
     });
     expect(MODEL_PLACEMENTS.technology_pc_3).toEqual({
       position: [-4.6, 0.68, -7.65],
-      rotationY: 0,
+      rotationY: Math.PI,
       maxDimensions: [0.88, 0.74, 0.66],
     });
     expect(MODEL_PLACEMENTS.technology_keyboard).toEqual({
@@ -112,15 +144,10 @@ describe('Cadastro unificado de modelos definitivos', () => {
       rotationY: 0,
       maxDimensions: [2.3, 2.55, 0.5],
     });
-    expect(MODEL_PLACEMENTS.health_shelf).toEqual({
-      position: [6.15, 1.3, 7.15],
-      rotationY: Math.PI,
-      maxDimensions: [2.3, 2.55, 0.5],
-    });
     expect(MODEL_PLACEMENTS.logistics_shelf).toEqual({
-      position: [7.905, 0.005, 4.5],
+      position: [7.905, 0.00475, 2.25],
       rotationY: -Math.PI / 2,
-      maxDimensions: [2.3, 2.55, 0.5],
+      maxDimensions: [3, 3.25, 1.2],
     });
     expect(MODEL_PLACEMENTS.cadeira_mesa_saude).toEqual({
       position: [2.6, 0, 6.45],
@@ -143,9 +170,9 @@ describe('Cadastro unificado de modelos definitivos', () => {
       });
     }
     expect(MODEL_PLACEMENTS.mesa).toEqual({
-      position: [0.3, 0.005, 7.25],
-      rotationY: 4.7125,
-      maxDimensions: [2.5, 2.1, 2.6],
+      position: [3.1, 0.005, 7.35],
+      rotationY: Math.PI,
+      maxDimensions: [2.2, 1.3, 2],
     });
     expect(MODEL_PLACEMENTS.maca).toEqual({
       position: [-2, 0.005, 5.85],
@@ -158,9 +185,9 @@ describe('Cadastro unificado de modelos definitivos', () => {
       maxDimensions: [1, 1.3, 1.03],
     });
     expect(MODEL_PLACEMENTS.mesa_medicina).toEqual({
-      position: [3.1, 0.005, 7.35],
-      rotationY: Math.PI,
-      maxDimensions: [2.2, 1.3, 2],
+      position: [0.3, 0.005, 7.25],
+      rotationY: 4.7125,
+      maxDimensions: [2.5, 2.1, 2.6],
     });
     // Coordenadas locais em relação ao topo da mesa de Medicina.
     expect(MODEL_PLACEMENTS.imac).toEqual({
@@ -193,6 +220,45 @@ describe('Cadastro unificado de modelos definitivos', () => {
       rotationY: Math.PI,
       maxDimensions: [0.5, 0.39, 0.24],
     });
+  });
+
+  it('usa a mesa alternativa em Administração, mantém a mesa médica em Logística e distribui as caixas', () => {
+    expect(MODEL_PLACEMENTS.administration_table).toEqual({
+      position: [-7.4, 0.005, -1.5],
+      rotationY: Math.PI / 2,
+      maxDimensions: [2.5, 2.1, 2.6],
+    });
+    expect(MODEL_PLACEMENTS.logistics_table).toEqual({
+      position: [7.35, 0.005, -1.75],
+      rotationY: 0,
+      maxDimensions: [2.5, 2.1, 2.6],
+    });
+    expect(MODEL_PLACEMENTS.logistics_cash_register).toEqual({
+      position: [7.325, -0.0625, -0.85],
+      rotationY: -Math.PI,
+      maxDimensions: [0.82, 0.56, 0.62],
+    });
+    expect(MODEL_PLACEMENTS.logistics_payment_terminal).toEqual({
+      position: [7.1, -0.0625, -1.3],
+      rotationY: -Math.PI / 2,
+      maxDimensions: [0.28, 0.3, 0.24],
+    });
+    expect(MODEL_PLACEMENTS.logistics_boxes_stack).toEqual({
+      position: [7, 0.005, 0.1],
+      rotationY: -Math.PI / 2,
+      maxDimensions: [1.75, 1.75, 1.75],
+    });
+    expect(MODEL_PLACEMENTS.logistics_box_single).toEqual({
+      position: [7.5, 2.15, 3.35],
+      rotationY: -Math.PI / 2,
+      maxDimensions: [0.44, 0.44, 0.44],
+    });
+    expect(MODEL_PLACEMENTS.logistics_box_shelf_2.position).toEqual([7.65, 1.475, 1.25]);
+    expect(MODEL_PLACEMENTS.logistics_box_shelf_3.position).toEqual([7.5, 0.825, 2.5]);
+    expect(MODEL_PLACEMENTS.logistics_box_shelf_4.position).toEqual([7.65, 0.15, 1.75]);
+    expect(MODEL_PLACEMENTS.logistics_box_under_table_1.position).toEqual([7.5, 1.15, -1.75]);
+    expect(MODEL_PLACEMENTS.logistics_box_under_table_2.position).toEqual([7.25, 1.15, -2.25]);
+    expect(MODEL_PLACEMENTS.logistics_box_under_table_3.position).toEqual([7.25, 0.2, -1.5]);
   });
 
   it('padroniza posição, rotação e tamanho para todos os modelos cadastrados', () => {

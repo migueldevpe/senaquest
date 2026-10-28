@@ -4,11 +4,15 @@ import { CharacterName } from '../CharacterName';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
 import * as THREE from 'three';
 import { useGame } from '../../game/store';
-import { victoryPunchEnvelope, victoryPunchSway } from '../characterAnimation';
+import {
+  VICTORY_ARM_POSE,
+  championEnvelope,
+  victoryPunchEnvelope,
+  victoryPunchSway,
+} from '../characterAnimation';
 
 import { CHARACTER_CONFIG, type CharacterSettings } from './characterConfig';
 import { Crown, CROWN_TOP_OFFSET } from '../VictoryEffects';
-import { championEnvelope } from '../characterAnimation';
 
 type RigJoint = { bone: THREE.Bone; rest: THREE.Quaternion };
 
@@ -277,69 +281,76 @@ export function FBXCharacter({
     );
     aim('LeftLeg', 'LeftFoot', up.clone().negate().addScaledVector(f, 0.12), 1.35);
     aim('RightLeg', 'RightFoot', up.clone().negate().addScaledVector(f, 0.12), 1.35);
-    // Soquinho de vitória: cotovelo flexionado junto ao corpo, punho sobe na altura do ombro.
-    // O braço esquerdo permanece na pose sentada; sem cruzamento de braços.
+    // Soquinho de acerto continua separado da comemoração final.
     const punchElapsed = now - punchStart.current;
     const punch = isChampion ? 0 : victoryPunchEnvelope(punchElapsed);
     const punchSway = victoryPunchSway(punchElapsed);
-    // Na vitória, ambos os braços se elevam de verdade (rotação > 90 graus).
-    // Cotovelos perto da linha dos ombros, antebraços quase verticais.
-    // O soquinho de acerto permanece exatamente como aprovado.
+    const leftVictory = VICTORY_ARM_POSE.left;
+    const rightVictory = VICTORY_ARM_POSE.right;
+    // Os cotovelos abrem lateralmente; os antebraços sobem e voltam para dentro.
+    // A pose é interpolada a partir dos movimentos já existentes, sem mudar o arremesso.
     const armLeft = up
       .clone()
-      .multiplyScalar(-0.93 + champion * 1.91)
-      .addScaledVector(r, -0.16 - champion * 0.24)
-      .addScaledVector(f, 0.25 - champion * 0.12);
+      .multiplyScalar(THREE.MathUtils.lerp(-0.93, leftVictory.upperArm.vertical, champion))
+      .addScaledVector(r, THREE.MathUtils.lerp(-0.16, leftVictory.upperArm.lateral, champion))
+      .addScaledVector(f, THREE.MathUtils.lerp(0.25, leftVictory.upperArm.forward, champion));
+    const armRightRestUp = -0.93 + throwMotion * 0.386 + prepShake * 0.55 + punch * 0.36;
+    const armRightRestLateral = 0.16 + punch * 0.025;
+    const armRightRestForward = 0.25 + throwMotion * 0.38 + prepShake - punch * 0.04;
     const armRight = up
       .clone()
       .multiplyScalar(
-        -0.93 + throwMotion * 0.386 + prepShake * 0.55 + punch * 0.36 + champion * 1.91,
+        THREE.MathUtils.lerp(armRightRestUp, rightVictory.upperArm.vertical, champion),
       )
-      .addScaledVector(r, 0.16 + punch * 0.025 + champion * 0.24)
-      .addScaledVector(f, 0.25 + throwMotion * 0.38 + prepShake - punch * 0.04 - champion * 0.12);
-    aim('LeftArm', 'LeftForeArm', armLeft, 2.85);
-    aim('RightArm', 'RightForeArm', armRight, 2.85);
-    aim(
-      'LeftForeArm',
-      'LeftHand',
-      f
-        .clone()
-        .multiplyScalar(0.88 - champion * 0.8)
-        .addScaledVector(up, -0.23 + champion * 1.22)
-        .addScaledVector(r, -champion * 0.035),
-      2.75,
-    );
-    aim(
-      'RightForeArm',
-      'RightHand',
-      f
-        .clone()
-        .multiplyScalar(0.88 + throwMotion * 0.38 - punch * 0.33 - champion * 0.8)
-        .addScaledVector(
-          up,
-          -0.23 +
-            throwMotion * 0.385 +
-            prepShake * 0.65 +
-            punch * (0.48 + punchSway) +
-            champion * 1.22,
-        )
-        .addScaledVector(r, punch * 0.025 + champion * 0.035),
-      2.75,
-    );
+      .addScaledVector(
+        r,
+        THREE.MathUtils.lerp(armRightRestLateral, rightVictory.upperArm.lateral, champion),
+      )
+      .addScaledVector(
+        f,
+        THREE.MathUtils.lerp(armRightRestForward, rightVictory.upperArm.forward, champion),
+      );
+    // Limites menores evitam que o solucionador rode o braço para trás do ombro.
+    aim('LeftArm', 'LeftForeArm', armLeft, 2.35);
+    aim('RightArm', 'RightForeArm', armRight, 2.35);
+
+    const forearmLeft = f
+      .clone()
+      .multiplyScalar(THREE.MathUtils.lerp(0.88, leftVictory.forearm.forward, champion))
+      .addScaledVector(up, THREE.MathUtils.lerp(-0.23, leftVictory.forearm.vertical, champion))
+      .addScaledVector(r, THREE.MathUtils.lerp(0, leftVictory.forearm.lateral, champion));
+    const forearmRightRestForward = 0.88 + throwMotion * 0.38 - punch * 0.33;
+    const forearmRightRestVertical =
+      -0.23 + throwMotion * 0.385 + prepShake * 0.65 + punch * (0.48 + punchSway);
+    const forearmRightRestLateral = punch * 0.025;
+    const forearmRight = f
+      .clone()
+      .multiplyScalar(
+        THREE.MathUtils.lerp(forearmRightRestForward, rightVictory.forearm.forward, champion),
+      )
+      .addScaledVector(
+        up,
+        THREE.MathUtils.lerp(forearmRightRestVertical, rightVictory.forearm.vertical, champion),
+      )
+      .addScaledVector(
+        r,
+        THREE.MathUtils.lerp(forearmRightRestLateral, rightVictory.forearm.lateral, champion),
+      );
+    aim('LeftForeArm', 'LeftHand', forearmLeft, 2.35);
+    aim('RightForeArm', 'RightHand', forearmRight, 2.35);
 
     // Fecha os dedos durante a preparação e os abre na soltura.
     // Apenas ossos presentes no FBX são animados, sem criar geometria solta.
     // O FBX usa nomes como RightHandIndex1, não RightIndex1.
     // A preparação fecha a mão; na soltura os dedos abrem rapidamente.
     // O punho ja comeca fechado no primeiro frame; abre durante a soltura.
-    const grip =
-      champion > 0.01 || punch > 0.01
+    const actionGrip =
+      punch > 0.01 || preparing
         ? 1
-        : preparing
-          ? 1
-          : elapsed >= 0 && elapsed < throwDuration
-            ? 1 - THREE.MathUtils.smoothstep(elapsed, 0.2, 0.36)
-            : 0;
+        : elapsed >= 0 && elapsed < throwDuration
+          ? 1 - THREE.MathUtils.smoothstep(elapsed, 0.2, 0.36)
+          : 0;
+    const grip = Math.max(champion, actionGrip);
     for (const [name, joint] of joints) {
       const finger = /^(Right|Left)Hand(Thumb|Index|Middle|Ring|Pinky|Little)([1-4])$/i.exec(name);
       if (!finger) continue;
@@ -347,7 +358,8 @@ export function FBXCharacter({
       if (segment === 4) continue; // ponta, não uma articulação flexível
       const thumb = finger[2].toLowerCase() === 'thumb';
       if (finger[1] === 'Left' && champion <= 0.01) continue;
-      const amount = (thumb ? 0.36 : 0.7) * (segment === 1 ? 1 : 0.82) * grip;
+      const curl = thumb ? (champion > 0.01 ? 0.46 : 0.36) : champion > 0.01 ? 0.92 : 0.7;
+      const amount = curl * (segment === 1 ? 1 : 0.82) * grip;
       // Ossos Mixamo: flexão na articulação local Z; polegar recebe eixo Y.
       idleEuler.set(
         0,
@@ -358,16 +370,8 @@ export function FBXCharacter({
       joint.bone.quaternion.multiply(idleQ);
     }
 
-    // Compensação local do punho na comemoração: não altera a elevação do braço.
-    // Valor conservador para não quebrar as outras animações.
-    if (champion > 0.001) {
-      const rightWrist = joints.get('RightHand');
-      if (rightWrist) {
-        idleEuler.set(0, 0, -0.32 * champion);
-        idleQ.setFromEuler(idleEuler);
-        rightWrist.bone.quaternion.multiply(idleQ);
-      }
-    }
+    // Não aplicamos torção local unilateral nos punhos: a orientação segue o antebraço,
+    // enquanto a flexão mais firme dos dedos forma os dois punhos de maneira simétrica.
 
     // Idle orgânico: frequências desencontradas para evitar movimento robótico.
     // Os ângulos são locais e pequenos; preservamos a pose sentada aprovada.

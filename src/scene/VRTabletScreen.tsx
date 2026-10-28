@@ -2,7 +2,7 @@ import { loadPoppinsCanvas } from './poppins';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
-import { COURSES, COURSE_IDS, NAMES } from '../game/data';
+import { COLORS, COURSES, COURSE_IDS, NAMES, colorIndex } from '../game/data';
 import { playSound } from '../game/sounds';
 import { currentTutorialStep, useTutorial } from './tutorialState';
 import { useThree } from '@react-three/fiber';
@@ -144,6 +144,19 @@ export function VRTabletScreen() {
   useEffect(() => setTrainingError(false), [tutorialMode, tutorialIndex]);
   const [page, setPage] = useState(0);
   const [fontReady, setFontReady] = useState(false);
+  const [logoImage, setLogoImage] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const image = new Image();
+    image.onload = () => {
+      if (alive) setLogoImage(image);
+    };
+    image.src = '/branding/senaquest-logo-outline.webp';
+    return () => {
+      alive = false;
+      image.onload = null;
+    };
+  }, []);
   useEffect(() => {
     let alive = true;
     void loadPoppinsCanvas()
@@ -428,7 +441,8 @@ export function VRTabletScreen() {
         text('Tente novamente: a última casa é a 30.', 600, 657, 24, C.accent, true, 'center');
       }
     } else if (phase === 'choose') {
-      sectionTitle('Bem-vindo ao SENAQUEST!', 96, 44);
+      if (logoImage) ctx.drawImage(logoImage, M.inset, 18, 330, 125);
+      else sectionTitle('Bem-vindo ao SENAQUEST!', 96, 44);
       sectionMessage('Escolha o curso da sua preferência.', 170, 30);
       const cells = tabletGrid(
         2,
@@ -448,17 +462,38 @@ export function VRTabletScreen() {
       sectionTitle(COURSES[game.course].name, 197, 36);
       rule(253);
       panel({ x: M.inset, y: 281, w: M.width - M.inset * 2, h: 235 }, C.cardDark);
-      paragraph(
-        COURSES[game.course].areas.join('  •  '),
-        M.inset + 28,
-        328,
-        M.width - M.inset * 2 - 56,
-        29,
-        C.cream,
-        false,
-        'left',
-        4,
-      );
+      const areas = COURSES[game.course].areas;
+      const chipHeight = 52;
+      const chipGap = 14;
+      ctx.font = '700 21px Poppins, sans-serif';
+      const chipWidths = areas.map((area) => Math.ceil(ctx.measureText(area).width + 58));
+      const drawAreaChip = (area: string, index: number, x: number, y: number, width: number) => {
+        const color = COLORS[colorIndex(index + 1)];
+        const fill = new THREE.Color(color).multiplyScalar(0.22).getStyle();
+        panel({ x, y, w: width, h: chipHeight }, fill, color, 14);
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(x + 21, y + chipHeight / 2, 6, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        paragraph(area, x + 36, y + chipHeight / 2, width - 46, 21, C.cream, true, 'left', 2);
+      };
+      // A ordem corresponde à sequência azul, verde, roxo, laranja e amarelo do tabuleiro.
+      const rows = [
+        { indexes: [0, 1, 2], y: 321 },
+        { indexes: [3, 4], y: 390 },
+      ];
+      for (const row of rows) {
+        const rowWidth =
+          row.indexes.reduce((sum, index) => sum + chipWidths[index], 0) +
+          chipGap * (row.indexes.length - 1);
+        let x = (M.width - rowWidth) / 2;
+        for (const index of row.indexes) {
+          drawAreaChip(areas[index], index, x, row.y, chipWidths[index]);
+          x += chipWidths[index] + chipGap;
+        }
+      }
       actionRow([
         { label: 'Confirmar e entrar', action: game.confirmCourse, width: 548 },
         { label: 'Voltar', action: game.enterBoard, primary: false, width: 548 },
@@ -642,6 +677,7 @@ export function VRTabletScreen() {
     pressed,
     clock,
     fontReady,
+    logoImage,
     gl,
     tutorialMode,
     tutorialIndex,

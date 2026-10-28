@@ -1,5 +1,6 @@
 /**
- * Modelos DEFINITIVOS de Saúde: mesa de Medicina e iMac originais do usuário.
+ * Modelo definitivo de Saúde: mesa (antigo identificador mesa_medicina) e iMac
+ * originais do usuário.
  * Cada FBX tem materiais/UVs separados. NÃO aplicar um atlas de um material
  * nos outros: isso desenha bordas pretas e recortes no tampo/teclado.
  * As imagens fornecidas são WebP locais; os mapas não enviados têm acabamento
@@ -181,13 +182,13 @@ let imacPromise: Promise<THREE.Group | null> | undefined;
 
 export function preloadMedicalDesk(): Promise<THREE.Group | null> {
   deskPromise ??= Promise.all([
-    loadFbx(`${ROOT}/mesa_medicina_otimizada.fbx`),
+    loadFbx(`${ROOT}/mesa.fbx`),
     loadTexture(`${ROOT}/desk_base.webp`, true),
     loadTexture(`${ROOT}/desk_normal.webp`, false),
   ])
     .then(([scene, drawerColor, drawerNormal]) => applyDesk(scene, { drawerColor, drawerNormal }))
     .catch((error: unknown) => {
-      console.warn('[SENAQUEST] Mesa Medicina indisponível', error);
+      console.warn('[SENAQUEST] Mesa indisponível', error);
       return null;
     });
   return deskPromise;
@@ -224,25 +225,18 @@ export function MedicalDeskModels() {
       active = false;
     };
   }, []);
-  const deskFit = useMemo(
-    () => desk && fitting(desk, MODEL_PLACEMENTS.mesa_medicina.maxDimensions),
-    [desk],
-  );
+  const deskFit = useMemo(() => desk && fitting(desk, MODEL_PLACEMENTS.mesa.maxDimensions), [desk]);
   const imacFit = useMemo(() => imac && fitting(imac, MODEL_PLACEMENTS.imac.maxDimensions), [imac]);
-  const deskCfg = MODEL_PLACEMENTS.mesa_medicina;
+  const deskCfg = MODEL_PLACEMENTS.mesa;
   const imacCfg = MODEL_PLACEMENTS.imac;
   const enabled =
     typeof window === 'undefined' ||
     new URLSearchParams(window.location.search).get('healthModels') !== 'off';
   if (!enabled) return null;
   return (
-    <group
-      name="medical-desk-with-imac"
-      position={deskCfg.position}
-      rotation={[0, deskCfg.rotationY, 0]}
-    >
+    <group name="mesa" position={deskCfg.position} rotation={[0, deskCfg.rotationY, 0]}>
       {desk && deskFit && (
-        <group name="medical-desk-surface" scale={deskFit.scale}>
+        <group name="mesa-surface" scale={deskFit.scale}>
           <group position={deskFit.offset}>
             <primitive object={desk} />
           </group>
@@ -250,7 +244,7 @@ export function MedicalDeskModels() {
       )}
       {imac && imacFit && deskFit && (
         <group
-          name="medical-desk-imac"
+          name="mesa-imac"
           position={[imacCfg.position[0], deskFit.top + imacCfg.position[1], imacCfg.position[2]]}
           rotation={[0, imacCfg.rotationY, 0]}
           scale={imacFit.scale}

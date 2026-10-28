@@ -382,6 +382,19 @@ function ActiveXRTutorial() {
     id: TutorialStepId;
     image: HTMLImageElement;
   } | null>(null);
+  const [brandLogo, setBrandLogo] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    const logo = new Image();
+    logo.onload = () => {
+      if (mounted) setBrandLogo(logo);
+    };
+    logo.src = '/branding/senaquest-logo-outline.webp';
+    return () => {
+      mounted = false;
+      logo.onload = null;
+    };
+  }, []);
   useEffect(() => {
     const asset = VR_GUIDE_ASSETS[stepId];
     if (!asset) {
@@ -460,7 +473,12 @@ function ActiveXRTutorial() {
     ctx.clearRect(0, 0, W, H);
     rounded(ctx, 16, 16, W - 32, H - 32, COLORS.bg, 22, COLORS.orange);
     rounded(ctx, 42, 42, W - 84, 75, '#235576', 12);
-    text(ctx, 'TUTORIAL VR · SENAQUEST', 67, 80, 23, COLORS.orange, true);
+    if (brandLogo) {
+      ctx.drawImage(brandLogo, 55, 45, 180, 68);
+      text(ctx, 'TUTORIAL VR', 255, 80, 23, COLORS.orange, true);
+    } else {
+      text(ctx, 'TUTORIAL VR · SENAQUEST', 67, 80, 23, COLORS.orange, true);
+    }
     text(
       ctx,
       `Etapa ${index + 1} / ${stepsFor('vr').length}`,
@@ -616,6 +634,7 @@ function ActiveXRTutorial() {
     next,
     end,
     guidePoster,
+    brandLogo,
   ]);
 
   useFrame((_, delta, frame) => {

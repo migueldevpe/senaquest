@@ -1,4 +1,9 @@
-const SOUND_CONFIG = { defaultVolume: 0.35, gainScale: 0.075, minimumGain: 0.0001 } as const;
+const SOUND_CONFIG = {
+  defaultVolume: 0.35,
+  gainScale: 0.075,
+  answerGainScale: 0.24,
+  minimumGain: 0.0001,
+} as const;
 const SOUND_PRESETS: Record<Sound, [number, number, number, OscillatorType]> = {
   step: [310, 390, 0.1, 'triangle'],
   correct: [620, 890, 0.22, 'sine'],
@@ -13,6 +18,17 @@ const SOUND_PRESETS: Record<Sound, [number, number, number, OscillatorType]> = {
   turn: [500, 670, 0.18, 'sine'],
   finish: [670, 1040, 0.36, 'sine'],
 };
+const ANSWER_NOTES = {
+  correct: [
+    { frequency: 660, start: 0, duration: 0.13 },
+    { frequency: 880, start: 0.14, duration: 0.13 },
+    { frequency: 1100, start: 0.28, duration: 0.19 },
+  ],
+  wrong: [
+    { frequency: 330, start: 0, duration: 0.16 },
+    { frequency: 220, start: 0.17, duration: 0.22 },
+  ],
+} as const;
 
 let volume: number = SOUND_CONFIG.defaultVolume;
 let audio: AudioContext | null = null;
@@ -38,6 +54,27 @@ export function playSound(type: Sound) {
   try {
     audio ??= new AudioContext();
     if (audio.state === 'suspended') void audio.resume();
+    if (type === 'correct' || type === 'wrong') {
+      const now = audio.currentTime;
+      const notes = ANSWER_NOTES[type];
+      for (const note of notes) {
+        const oscillator = audio.createOscillator();
+        const gain = audio.createGain();
+        const start = now + note.start;
+        const end = start + note.duration;
+        oscillator.type = type === 'correct' ? 'sine' : 'triangle';
+        oscillator.frequency.setValueAtTime(note.frequency, start);
+        gain.gain.setValueAtTime(
+          Math.max(SOUND_CONFIG.minimumGain, volume * SOUND_CONFIG.answerGainScale),
+          start,
+        );
+        gain.gain.exponentialRampToValueAtTime(SOUND_CONFIG.minimumGain, end);
+        oscillator.connect(gain).connect(audio.destination);
+        oscillator.start(start);
+        oscillator.stop(end + 0.01);
+      }
+      return;
+    }
     const [start, end, duration, wave] = SOUND_PRESETS[type];
     const now = audio.currentTime;
     const osc = audio.createOscillator(),

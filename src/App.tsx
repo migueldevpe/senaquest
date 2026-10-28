@@ -8,15 +8,18 @@ import { StartupLoading } from './scene/StartupLoading';
 import { playSound, setSoundVolume } from './game/sounds';
 import {
   setBackgroundMusic,
+  setBackgroundMusicDucked,
+  setBackgroundMusicMuted,
   unlockBackgroundMusic,
   disposeBackgroundMusic,
   isBackgroundMusicBlocked,
-  type MusicContext,
+  musicContextForPhase,
 } from './game/backgroundMusic';
 import { useDiceTuning } from './scene/diceTuning';
 import { DesktopTutorial } from './scene/DesktopTutorial';
 import { useTutorial } from './scene/tutorialState';
 import { isTutorialComplete } from './scene/tutorialFlow';
+import { isBelowMinimumViewport, MINIMUM_VIEWPORT } from './minimumViewport';
 
 type AutoPhase =
   | 'intro'
@@ -213,17 +216,20 @@ function GameApp({
       if (soundLevel > 0) lastAudibleLevel.current = soundLevel;
       setSoundLevel(0);
       setSoundVolume(0);
+      setBackgroundMusicMuted(true);
       setSoundOn(false);
     } else {
       const next = lastAudibleLevel.current || 0.35;
       setSoundLevel(next);
       setSoundVolume(next);
+      setBackgroundMusicMuted(false);
       setSoundOn(true);
     }
   };
   const updateVolume = (next: number) => {
     setSoundLevel(next);
     setSoundVolume(next);
+    setBackgroundMusicMuted(next <= 0);
     setSoundOn(next > 0);
     if (next > 0) lastAudibleLevel.current = next;
   };
@@ -266,15 +272,13 @@ function GameApp({
     };
   }, [game.phase]);
 
-  // Um só controlador de música em todas as fases (incluindo WebXR).
-  // Robôs e turnos pulados nunca iniciam a música do questionário.
-  const musicContext: MusicContext = !sceneReady
-    ? null
-    : game.phase === 'choose' || game.phase === 'confirm'
-      ? 'menu'
-      : game.phase === 'question' && currentPlayer(game) === 0
-        ? 'question'
-        : null;
+  // Um só controlador escolhe a trilha da fase; bots mantêm a música de gameplay.
+  const musicContext = musicContextForPhase(
+    sceneReady,
+    game.phase,
+    currentPlayer(game),
+    game.winner,
+  );
   useEffect(() => {
     setBackgroundMusic(musicContext);
   }, [musicContext]);
@@ -283,24 +287,28 @@ function GameApp({
   useEffect(
     () =>
       useGame.subscribe((next, previous) => {
-        if (
-          previous.phase === 'question' &&
-          next.phase !== 'question' &&
-          currentPlayer(previous) === 0
-        ) {
-          setBackgroundMusic(null);
-        }
+        if (previous.phase !== 'question' || next.phase === 'question') return;
+        if (currentPlayer(previous) !== 0 || !sceneReady) return;
+        setBackgroundMusic(
+          next.phase === 'feedback'
+            ? 'afterQuestionary'
+            : next.phase === 'finished'
+              ? next.winner === null
+                ? null
+                : 'win'
+              : 'gameplay',
+        );
       }),
-    [],
+    [sceneReady],
   );
   useEffect(() => {
     const unlock = () => unlockBackgroundMusic();
-    window.addEventListener('pointerdown', unlock, { passive: true });
-    window.addEventListener('touchend', unlock, { passive: true });
+    window.addEventListener('pointerdown', unlock, { passive: true, capture: true });
+    window.addEventListener('touchend', unlock, { passive: true, capture: true });
     window.addEventListener('keydown', unlock);
     return () => {
-      window.removeEventListener('pointerdown', unlock);
-      window.removeEventListener('touchend', unlock);
+      window.removeEventListener('pointerdown', unlock, true);
+      window.removeEventListener('touchend', unlock, true);
       window.removeEventListener('keydown', unlock);
       disposeBackgroundMusic();
     };
@@ -326,8 +334,20 @@ function GameApp({
     if (game.phase === 'lotteryRolling') playSound('reveal');
     if (game.phase === 'turn') playSound('turn');
     if (game.phase === 'question') playSound('select');
-    if (game.phase === 'feedback') playSound(game.outcome === 'correct' ? 'correct' : 'wrong');
     if (game.phase === 'finished') playSound('victory');
+  }, [game.phase, game.outcome]);
+  useEffect(() => {
+    if (game.phase !== 'feedback' || (game.outcome !== 'correct' && game.outcome !== 'wrong')) {
+      setBackgroundMusicDucked(false);
+      return;
+    }
+    playSound(game.outcome);
+    setBackgroundMusicDucked(true);
+    const timeout = window.setTimeout(() => setBackgroundMusicDucked(false), 600);
+    return () => {
+      window.clearTimeout(timeout);
+      setBackgroundMusicDucked(false);
+    };
   }, [game.phase, game.outcome]);
 
   // Todas as transições são temporizadas e usam o mesmo relógio visual.
@@ -549,10 +569,8 @@ function GameApp({
         </button>
       )}
       <header className="header">
-        <div>
-          <strong>
-            SENA<span>QUEST</span>
-          </strong>
+        <div className="brand-lockup">
+          <img className="brand-logo" src="/branding/senaquest-logo-outline.webp" alt="SenaQuest" />
           <small>Desafio dos Cursos VR</small>
         </div>
       </header>
@@ -569,44 +587,58 @@ function GameApp({
         </button>
         {debugOpen && (
           <div className="settings-menu">
-            {(game.phase === 'choose' || game.phase === 'confirm') && (
+            <div className="settings-quick-actions">
+              {(game.phase === 'choose' || game.phase === 'confirm') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDebugOpen(false);
+                    startTutorial('desktop');
+                  }}
+                >
+                  ◈ Como jogar · Tutorial
+                </button>
+              )}
               <button
                 type="button"
+                className="vr"
                 onClick={() => {
                   setDebugOpen(false);
-                  startTutorial('desktop');
+                  void xrStore.enterVR().catch((error: unknown) => {
+                    console.error('[SENAQUEST] Falha ao iniciar a sessão WebXR:', error);
+                    alert('VR indisponível. Use HTTPS no navegador do Meta Quest 3S.');
+                  });
                 }}
               >
-                ◈ Como jogar · Tutorial
+                ◉ Entrar em VR
               </button>
-            )}
-            <button
-              type="button"
-              className="vr"
-              onClick={() =>
-                xrStore
-                  .enterVR()
-                  .catch(() => alert('VR indisponível. Use HTTPS no navegador do Meta Quest 3S.'))
-              }
-            >
-              ◉ Entrar em VR
-            </button>
-            <button type="button" aria-pressed={!soundOn} onClick={toggleSound}>
-              {soundOn ? '🔊 Silenciar interface' : '🔇 Ativar sons'}
-            </button>
-            <label className="sound-volume-label" htmlFor="sound-volume">
-              Volume dos sons <output>{Math.round(soundLevel * 100)}%</output>
-            </label>
-            <input
-              id="sound-volume"
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={soundLevel}
-              onChange={(event) => updateVolume(Number(event.target.value))}
-              aria-label="Volume dos sons"
-            />
+              <button
+                type="button"
+                className="settings-mute"
+                aria-pressed={!soundOn}
+                aria-label={
+                  soundOn ? 'Silenciar todo o áudio do site' : 'Ativar todo o áudio do site'
+                }
+                onClick={toggleSound}
+              >
+                {soundOn ? '🔊 Silenciar site' : '🔇 Ativar áudio'}
+              </button>
+            </div>
+            <div className="settings-volume-controls">
+              <label className="sound-volume-label" htmlFor="sound-volume">
+                Volume dos sons <output>{Math.round(soundLevel * 100)}%</output>
+              </label>
+              <input
+                id="sound-volume"
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={soundLevel}
+                onChange={(event) => updateVolume(Number(event.target.value))}
+                aria-label="Volume dos sons"
+              />
+            </div>
             <details className="debug-details">
               <summary>Depuração</summary>
               <div className="debug-body">
@@ -997,6 +1029,10 @@ function GameApp({
 }
 
 function App() {
+  const [viewport, setViewport] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }));
   const [assetsReady, setAssetsReady] = useState(false);
   const [sceneReady, setSceneReady] = useState(false);
   const [fading, setFading] = useState(false);
@@ -1004,6 +1040,12 @@ function App() {
   const [sceneError, setSceneError] = useState<string | null>(null);
   const markAssetsReady = useCallback(() => setAssetsReady(true), []);
   const markSceneReady = useCallback(() => setSceneReady(true), []);
+  useEffect(() => {
+    const updateViewport = () =>
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener('resize', updateViewport);
+    return () => window.removeEventListener('resize', updateViewport);
+  }, []);
   useEffect(() => {
     if (!assetsReady || sceneReady) return;
     const timeout = window.setTimeout(() => {
@@ -1018,6 +1060,35 @@ function App() {
     const frame = requestAnimationFrame(() => setFading(true));
     return () => cancelAnimationFrame(frame);
   }, [assetsReady, sceneReady]);
+  const belowMinimum = isBelowMinimumViewport(viewport.width, viewport.height);
+  if (belowMinimum) {
+    return (
+      <main className="resolution-blocker" role="alertdialog" aria-labelledby="resolution-title">
+        <section className="resolution-card">
+          <img
+            className="startup-logo"
+            src="/branding/senaquest-logo-outline.webp"
+            alt="SenaQuest"
+          />
+          <h1 id="resolution-title">Tela menor que a recomendada</h1>
+          <p>
+            O SENAQUEST precisa de mais espaço para exibir os controles e o conteúdo corretamente.
+          </p>
+          <p>
+            Aumente a janela ou use tela cheia. A área mínima recomendada é{' '}
+            <strong>
+              {MINIMUM_VIEWPORT.width} × {MINIMUM_VIEWPORT.height} px
+            </strong>
+            ; sua janela está em{' '}
+            <strong>
+              {viewport.width} × {viewport.height} px
+            </strong>
+            .
+          </p>
+        </section>
+      </main>
+    );
+  }
   return (
     <>
       {assetsReady && (

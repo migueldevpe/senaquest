@@ -1,6 +1,6 @@
 /**
  * Modelos definitivos do setor Saúde.
- * Inclui os três modelos principais do conjunto original (mesa, maca, trolley)
+ * Inclui os três modelos principais do conjunto original (mesa_medicina, maca, trolley)
  * e acessórios adicionais configuráveis (iv pole, trash, glove box, defibrillator).
  *
  * Todos os materiais externos novos são convertidos para WebP e aplicados em tempo
@@ -22,7 +22,7 @@ const ROOT = '/models/health-final';
 const ACCESSORY_ROOT = `${ROOT}/accessories`;
 const FALLBACK_TEXTURE = `${ROOT}/medicine/neutral.webp`;
 const HEALTH_MODEL_IDS = [
-  'mesa',
+  'mesa_medicina',
   'maca',
   'trolley',
   'iv_pole',
@@ -52,11 +52,13 @@ const textureCache = new Map<string, THREE.Texture>();
 const texturePending = new Map<string, Promise<void>>();
 
 function modelRoot(id: HealthModelId): string {
+  if (id === 'mesa_medicina') return `${ROOT}/mesa_medicina`;
   return ACCESSORY_IDS.has(id) ? `${ACCESSORY_ROOT}/${id}` : `${ROOT}/${id}`;
 }
 
 function modelUrl(id: HealthModelId): string {
-  return id === 'iv_pole' ? `${modelRoot(id)}/${id}.glb` : `${modelRoot(id)}/${id}.fbx`;
+  if (id === 'iv_pole') return `${modelRoot(id)}/${id}.glb`;
+  return `${modelRoot(id)}/${id}.fbx`;
 }
 
 function localTexture(id: HealthModelId, filename: string, srgb = false): THREE.Texture {
@@ -154,18 +156,18 @@ function standardMaterials(
         aoMap: ao,
         aoMapIntensity: 0.65,
       });
-    } else if (id === 'mesa') {
+    } else if (id === 'mesa_medicina') {
       // MaskMap veio sem alpha: R=metalicidade, G=oclusão.
-      const ao = localTexture('mesa', 'table_mat_AOFromMask.webp');
+      const ao = localTexture('mesa_medicina', 'table_mat_AOFromMask.webp');
       ao.channel = 0;
       material = new THREE.MeshStandardMaterial({
         name: source.name,
         color: '#ffffff',
         roughness: 0.72,
         metalness: 1,
-        map: localTexture('mesa', 'table_mat_BaseMap.webp', true),
-        normalMap: localTexture('mesa', 'table_mat_Normal.webp'),
-        metalnessMap: localTexture('mesa', 'table_mat_MetallicFromMask.webp'),
+        map: localTexture('mesa_medicina', 'table_mat_BaseMap.webp', true),
+        normalMap: localTexture('mesa_medicina', 'table_mat_Normal.webp'),
+        metalnessMap: localTexture('mesa_medicina', 'table_mat_MetallicFromMask.webp'),
         aoMap: ao,
         aoMapIntensity: 0.5,
       });
@@ -317,6 +319,12 @@ function loadHealthModel(id: HealthModelId): Promise<THREE.Group | null> {
   });
   modelCache.set(id, result);
   return result;
+}
+
+/** Reutiliza a mesa_medicina original sem baixar outro FBX; cada área recebe um clone. */
+export async function preloadHealthMedicineTableModel(): Promise<THREE.Group | null> {
+  const model = await loadHealthModel('mesa_medicina');
+  return (model?.clone(true) as THREE.Group | undefined) ?? null;
 }
 
 function HealthModel({ id }: { id: HealthModelId }) {

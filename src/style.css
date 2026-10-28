@@ -1,8 +1,8 @@
-@import '@fontsource/poppins/400.css';
-@import '@fontsource/poppins/500.css';
-@import '@fontsource/poppins/600.css';
-@import '@fontsource/poppins/700.css';
-@import '@fontsource/poppins/800.css';
+@import '@fontsource/poppins/latin-400.css';
+@import '@fontsource/poppins/latin-500.css';
+@import '@fontsource/poppins/latin-600.css';
+@import '@fontsource/poppins/latin-700.css';
+@import '@fontsource/poppins/latin-800.css';
 :root {
   font-family: 'Poppins', system-ui, sans-serif;
   color: #fff;
@@ -69,15 +69,21 @@ button:focus-visible {
 .header > * {
   pointer-events: auto;
 }
-.header strong {
-  font-size: 24px;
-  letter-spacing: 0.7px;
+.brand-lockup {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
 }
-.header strong span {
-  color: var(--orange);
+.brand-logo {
+  display: block;
+  width: clamp(132px, 14vw, 190px);
+  height: auto;
+  object-fit: contain;
 }
 .header small {
   display: block;
+  margin-top: -2px;
   font-size: 11px;
   color: #e2eaf3;
 }
@@ -735,14 +741,45 @@ button:focus-visible {
   border-color: #f7941d;
 }
 .settings-menu {
-  margin-top: 8px;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  margin-top: 0;
+  width: min(520px, calc(100vw - 2 * var(--ui-edge) - 16px));
+  max-height: calc(100dvh - var(--ui-edge) - 72px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background: #003b6af3;
   border: 1px solid #f7941d;
   border-radius: var(--ui-modal-radius);
   padding: 12px;
   box-shadow: 0 14px 35px #001b3280;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+}
+.settings-quick-actions {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.settings-quick-actions .settings-mute {
+  grid-column: 1 / -1;
+}
+.settings-volume-controls {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 1.4fr);
+  align-items: center;
+  gap: 12px;
+}
+.settings-menu > details {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+.settings-volume-controls > input[type='range'] {
+  width: 100%;
 }
 .debug-panel button {
   width: 100%;
@@ -760,6 +797,20 @@ button:focus-visible {
 }
 .debug-body {
   padding: 8px 0 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.debug-body > .debug-simulations {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+.debug-simulations > legend,
+.debug-simulations > label,
+.debug-simulations > select {
+  grid-column: 1 / -1;
 }
 .debug-body label {
   font-size: 12px;
@@ -972,7 +1023,6 @@ button:focus-visible {
   padding: 0.7rem 1rem;
   box-shadow: 0 10px 28px #001b3299;
 }
-
 /* ===== INICIALIZAÇÃO — TELA DE CARREGAMENTO ===== */
 .startup {
   position: fixed;
@@ -994,15 +1044,12 @@ button:focus-visible {
   background: #192f4a;
   box-shadow: 0 20px 65px #050f2388;
 }
-.startup h1 {
-  letter-spacing: 0.075em;
-  font-size: clamp(2rem, 8vw, 3rem);
-  margin: 0;
-  font-weight: 800;
-  color: #e8effb;
-}
-.startup h1 span {
-  color: #f2b84e;
+.startup-logo {
+  display: block;
+  width: min(320px, 92%);
+  height: auto;
+  margin: 0 auto 1.15rem;
+  object-fit: contain;
 }
 .startup-card > p:first-of-type {
   color: #a6bad0;
@@ -1066,6 +1113,42 @@ button:focus-visible {
   padding: 0.7rem 1.1rem;
   cursor: pointer;
 }
+.resolution-blocker {
+  position: fixed;
+  inset: 0;
+  z-index: 20000;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  padding: 20px;
+  background: radial-gradient(ellipse at 50% 10%, #253c5c 0, #101c30 72%);
+  color: #e9f1ff;
+  font-family: Poppins, sans-serif;
+}
+.resolution-card {
+  width: min(100%, 520px);
+  padding: clamp(20px, 5vw, 36px);
+  border: 1px solid #526784;
+  border-radius: 18px;
+  background: #192f4a;
+  box-shadow: 0 20px 65px #050f2388;
+  text-align: center;
+}
+.resolution-card h1 {
+  margin: 0 0 12px;
+  font-size: clamp(1.3rem, 5vw, 1.8rem);
+}
+.resolution-card p {
+  color: #c6d5e7;
+  line-height: 1.6;
+}
+.resolution-card strong {
+  color: #f2b84e;
+  white-space: nowrap;
+}
+.resolution-card button {
+  margin-top: 8px;
+}
 /* O Canvas e o HUD montam ATRÁS desta camada. Só revelamos depois de
    a sala 3D terminar os primeiros quadros; sem flash azul intermediário. */
 .startup {
@@ -1118,6 +1201,19 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+}
+.sena-tutorial-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.sena-tutorial-logo {
+  display: block;
+  width: 100px;
+  max-height: 38px;
+  height: auto;
+  object-fit: contain;
 }
 .sena-tutorial-eyebrow {
   font-weight: 700;
@@ -1350,4 +1446,83 @@ button:focus-visible {
 }
 .sena-tutorial-victory small {
   text-align: center;
+}
+
+/* Ajustes exclusivos para desktop/notebooks; telas grandes mantêm o layout padrão. */
+@media (min-width: 901px) and (max-width: 1366px) {
+  :root {
+    --ui-edge: 14px;
+    --ui-panel-padding: 17px;
+  }
+  .brand-logo {
+    width: clamp(120px, 12vw, 165px);
+  }
+  .app .hud {
+    width: 218px;
+    padding: 14px;
+  }
+  .app .panel:not(.quiz-panel):not(.feedback-panel) {
+    width: min(400px, calc(100vw - 264px));
+    padding: var(--ui-panel-padding);
+  }
+  .app .quiz-panel,
+  .app .feedback-panel {
+    width: min(700px, calc(100vw - 2 * var(--ui-edge)));
+    padding: var(--ui-panel-padding);
+  }
+  .sena-tutorial-dialog {
+    width: min(720px, 100%);
+    padding: clamp(20px, 2.4vw, 32px);
+  }
+}
+
+@media (min-width: 901px) and (max-height: 800px) {
+  .app .panel,
+  .app .hud,
+  .app .quiz-panel,
+  .app .feedback-panel {
+    max-height: calc(100dvh - var(--ui-edge) - var(--ui-bottom));
+  }
+  .app .panel:not(.quiz-panel):not(.feedback-panel) {
+    padding: 14px;
+  }
+  .panel h1 {
+    font-size: 21px;
+  }
+  .panel h2,
+  .quiz-feedback h2 {
+    font-size: 18px;
+  }
+  .panel p {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .panel .quiz-prompt {
+    margin: 12px 0;
+    font-size: clamp(18px, 2vw, 24px);
+  }
+  .panel .kahoot-answer {
+    min-height: 64px;
+    padding: 10px 12px;
+  }
+  .sena-tutorial-dialog {
+    min-height: 0;
+    max-height: calc(100dvh - 32px);
+    gap: 12px;
+    padding: 18px 22px;
+  }
+  .sena-tutorial-content {
+    min-height: 0;
+    gap: 10px;
+  }
+  .sena-tutorial-dialog > .sena-tutorial-footer {
+    padding-top: 12px;
+  }
+  .startup-card > p:first-of-type {
+    margin-bottom: 1.5rem;
+  }
+  .startup-logo {
+    width: min(270px, 88%);
+    margin-bottom: 0.8rem;
+  }
 }

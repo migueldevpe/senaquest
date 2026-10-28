@@ -15,9 +15,12 @@ describe('lançamentos dos quatro lados', () => {
   it('só fecha a passagem após o dado inteiro entrar', () => {
     expect(hasClearedEntry(0, 0, 1.65)).toBe(false);
     expect(hasClearedEntry(0, 0, 1.5)).toBe(true);
-    expect(hasClearedEntry(1, 0, -1.65)).toBe(false);
-    expect(hasClearedEntry(2, 1.65, 0)).toBe(false);
+    expect(hasClearedEntry(1, 1.65, 0)).toBe(false);
+    expect(hasClearedEntry(1, 1.5, 0)).toBe(true);
+    expect(hasClearedEntry(2, 0, -1.65)).toBe(false);
+    expect(hasClearedEntry(2, 0, -1.5)).toBe(true);
     expect(hasClearedEntry(3, -1.65, 0)).toBe(false);
+    expect(hasClearedEntry(3, -1.5, 0)).toBe(true);
   });
   it('detecta quedas e fugas da arena', () => {
     expect(outsideArena(0, 0, 1.2)).toBe(false);

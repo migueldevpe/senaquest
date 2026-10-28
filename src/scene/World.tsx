@@ -1,5 +1,5 @@
 import { POPPINS_3D } from './poppins';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree, useLoader } from '@react-three/fiber';
 import { RoundedBox, Text } from '@react-three/drei';
 import { XR, XROrigin, createXRStore } from '@react-three/xr';
@@ -10,6 +10,13 @@ import { VRRollDebugPanel } from './VRRollDebugPanel';
 import { HealthSectorModels } from './HealthSectorModels';
 import { MedicalDeskModels } from './MedicalDeskModels';
 import { LogisticsShelfModel } from './LogisticsShelfModel';
+import { SectorTableCopies } from './SectorTableCopies';
+import { AdministrationPrinterAndImac } from './AdministrationPrinterAndImac';
+import { AdministrationDeskItems } from './AdministrationDeskItems';
+import { LogisticsCashRegisterModel } from './LogisticsCashRegisterModel';
+import { LogisticsPaymentTerminal } from './LogisticsPaymentTerminal';
+import { LogisticsBoxesModel } from './LogisticsBoxesModel';
+import { SectorWhiteboards } from './SectorWhiteboards';
 import {
   ROOM_INNER_FACE,
   ROOM_WALL,
@@ -22,18 +29,18 @@ import { MODEL_PLACEMENTS } from './modelPlacements';
 import { CeilingLightFixtures } from './CeilingLightFixtures';
 import { TechnologyExhibits } from './technology';
 // SENAQUEST_TEMP_DECOR_IMPORT_BEGIN
-import { AdministrationWallDecor, SectorShelfDecor } from './SectorDecor';
+import { AdministrationWallDecor } from './SectorDecor';
 // SENAQUEST_TEMP_DECOR_IMPORT_END
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 import { COLORS, NAMES, colorIndex } from '../game/data';
 import { PLAYER_COLORS } from '../game/playerVisual';
 import { useGame } from '../game/store';
-import { DicePhysics } from './Dice';
 import { FBXChico } from './characters/Chico';
 import { FBXPaty } from './characters/Paty';
 import { FBXClaudinha } from './characters/Claudinha';
 import { VictoryEffects } from './VictoryEffects';
+import { isRoomMounted } from './sceneReadiness';
 import {
   pawnOffset,
   boardGridPosition,
@@ -58,6 +65,9 @@ const BOARD_VISUAL = {
   pawnStepSeconds: 0.3,
   pawnHopHeight: 0.39,
 } as const;
+const LazyDicePhysics = lazy(() =>
+  import('./Dice').then(({ DicePhysics }) => ({ default: DicePhysics })),
+);
 export const PAWN_COLORS = PLAYER_COLORS;
 // O visual do Peão de Jornada vem do FBX; a lógica de movimento permanece neste arquivo.
 
@@ -374,8 +384,6 @@ function Board() {
     if (Math.abs(progress.current - target) < 0.001) progress.current = target;
     const t = progress.current;
     const eased = t * t * (3 - 2 * t);
-    // Entrada por escala apenas. Nunca tocar em opacity, transparent,
-    // depthWrite, alphaHash ou renderOrder de materiais da cena.
     group.scale.setScalar(0.4 * (0.94 + 0.06 * eased));
     group.visible = canReveal || t > 0.001;
   });
@@ -559,12 +567,14 @@ function TestFBXChair({
   position,
   rotation = 0,
   player = false,
+  height = TEST_CHAIR.height,
 }: {
   position: [number, number, number];
   rotation?: number;
   player?: boolean;
+  height?: number;
 }) {
-  const config = player ? PLAYER_CHAIR : TEST_CHAIR;
+  const config = player ? PLAYER_CHAIR : { ...TEST_CHAIR, height };
   const source = useLoader(FBXLoader, '/models/main_chair.fbx');
   const chairTexture = useLoader(THREE.TextureLoader, '/models/main_chair-color.webp');
   chairTexture.colorSpace = THREE.SRGBColorSpace;
@@ -638,54 +648,6 @@ const TEMP_SECTOR_DECOR_MODE = (() => {
 })();
 // SENAQUEST_TEMP_DECOR_FLAG_END
 
-function Shelf({
-  position,
-  rotation = 0,
-  boxes = false,
-  sector,
-}: {
-  position: [number, number, number];
-  rotation?: number;
-  boxes?: boolean;
-  sector?: 'technology' | 'logistics' | 'health';
-}) {
-  return (
-    <group position={position} rotation={[0, rotation, 0]}>
-      {[-1.1, -0.35, 0.4, 1.15].map((y) => (
-        <mesh key={y} position={[0, y, 0]}>
-          <boxGeometry args={[2.3, 0.09, 0.48]} />
-          <meshStandardMaterial color="#a98560" />
-        </mesh>
-      ))}
-      {[-1.08, 1.08].map((x) => (
-        <mesh key={x}>
-          <mesh position={[x, 0, 0]}>
-            <boxGeometry args={[0.1, 2.55, 0.5]} />
-            <meshStandardMaterial color="#5c6e77" />
-          </mesh>
-        </mesh>
-      ))}
-      {/* SENAQUEST_TEMP_DECOR_SHELF_BEGIN */}
-      {sector && TEMP_SECTOR_DECOR_MODE === 'placeholders' ? (
-        <SectorShelfDecor sector={sector} />
-      ) : TEMP_SECTOR_DECOR_MODE === 'legacy' ? (
-        Array.from({ length: 9 }, (_, i) => (
-          <mesh key={i} position={[-0.78 + (i % 3) * 0.77, -0.76 + Math.floor(i / 3) * 0.75, 0.03]}>
-            <boxGeometry args={[boxes ? 0.51 : 0.15, 0.42, 0.31]} />
-            <meshStandardMaterial
-              color={
-                boxes
-                  ? ['#c69c6d', '#b88754', '#d4b082'][i % 3]
-                  : ['#318fba', '#de9c51', '#5e9f8e'][i % 3]
-              }
-            />
-          </mesh>
-        ))
-      ) : null}
-      {/* SENAQUEST_TEMP_DECOR_SHELF_END */}
-    </group>
-  );
-}
 function WallPanel({
   position,
   rotation = 0,
@@ -765,19 +727,25 @@ function WallDecor() {
         subtitle="Estoque • Transporte • Comércio"
         color="#bb7136"
       />
-      <Shelf
-        position={MODEL_PLACEMENTS.health_shelf.position}
-        rotation={MODEL_PLACEMENTS.health_shelf.rotationY}
-        boxes
-        sector="health"
-      />
       <TechnologyExhibits />
       {/* Modelos fornecidos pelo usuário: permanentes e independentes dos placeholders. */}
       <HealthSectorModels />
       <MedicalDeskModels />
+      <SectorTableCopies />
+      <AdministrationPrinterAndImac />
+      <AdministrationDeskItems />
+      <LogisticsCashRegisterModel />
+      <LogisticsPaymentTerminal />
+      <LogisticsBoxesModel />
+      <SectorWhiteboards />
       <TestFBXChair
         position={MODEL_PLACEMENTS.cadeira_mesa_saude.position}
         rotation={MODEL_PLACEMENTS.cadeira_mesa_saude.rotationY}
+      />
+      <TestFBXChair
+        position={MODEL_PLACEMENTS.administration_chair.position}
+        rotation={MODEL_PLACEMENTS.administration_chair.rotationY}
+        height={MODEL_PLACEMENTS.administration_chair.maxDimensions[1]}
       />
       {/* Estante definitiva de Logística e Vendas — substitui a estante antiga
           e seus placeholders; configuração em modelPlacements.ts. */}
@@ -944,7 +912,13 @@ function StableRoomLighting() {
     const hemisphere = hemisphereRef.current;
     const directional = directionalRef.current;
     if (!ambient || !hemisphere || !directional) return;
-    // Repõe o contrato luminoso se alguma biblioteca mudar as luzes existentes.
+    // Inspecionar outras fontes de luz no inicio de cada fase e a cada 0,5s;
+    // atravessar a cena a cada quadro prejudicaria o desempenho do Quest.
+    sampling.current += delta;
+    const changedPhase = lastPhase.current !== phase;
+    if (!changedPhase && sampling.current < 0.5) return;
+    sampling.current = 0;
+    lastPhase.current = phase;
     ambient.intensity = STABLE_LIGHTS.ambient.intensity;
     hemisphere.intensity = STABLE_LIGHTS.hemisphere.intensity;
     directional.intensity = STABLE_LIGHTS.directional.intensity;
@@ -954,14 +928,6 @@ function StableRoomLighting() {
     directional.color.set(STABLE_LIGHTS.directional.color);
     directional.position.set(...STABLE_LIGHTS.directional.position);
     ambient.visible = hemisphere.visible = directional.visible = true;
-
-    // Inspecionar outras fontes de luz no inicio de cada fase e a cada 0,5s;
-    // atravessar a cena a cada quadro prejudicaria o desempenho do Quest.
-    sampling.current += delta;
-    const changedPhase = lastPhase.current !== phase;
-    if (!changedPhase && sampling.current < 0.5) return;
-    sampling.current = 0;
-    lastPhase.current = phase;
     const lights: THREE.Light[] = [];
     scene.traverse((object) => {
       // `isLight` tambem identifica objetos de outra copia de Three.js.
@@ -1089,7 +1055,9 @@ function Classroom() {
       ))}
       <WallDecor />
       <Desk />
-      <DicePhysics />
+      <Suspense fallback={null}>
+        <LazyDicePhysics />
+      </Suspense>
       <VictoryEffects />
       <TestFBXChair position={[0, 0, -3.18]} rotation={0} />
       <FBXPaty position={[0, 0, -3.18]} rotation={0} />
@@ -1193,9 +1161,14 @@ function VRPinchCameraRig({
       const space = gl.xr.getReferenceSpace();
       if (session && space) {
         // Handedness fixa: a ordem dos inputSources pode variar durante a sessão.
-        const hands = [...session.inputSources].filter((source) => !!source.hand);
-        const readPinch = (handedness: XRHandedness, i: number) => {
-          const source = hands.find((hand) => hand.handedness === handedness);
+        let leftHand: XRInputSource | undefined;
+        let rightHand: XRInputSource | undefined;
+        for (const source of session.inputSources) {
+          if (!source.hand) continue;
+          if (source.handedness === 'left') leftHand = source;
+          else if (source.handedness === 'right') rightHand = source;
+        }
+        const readPinch = (source: XRInputSource | undefined, i: number) => {
           const thumb = source?.hand?.get('thumb-tip');
           const index = source?.hand?.get('index-finger-tip');
           const a = thumb && frame.getJointPose?.(thumb, space);
@@ -1211,8 +1184,8 @@ function VRPinchCameraRig({
           pinching.current[i] = active;
           return active;
         };
-        const left = readPinch('left', 0);
-        const right = readPinch('right', 1);
+        const left = readPinch(leftHand, 0);
+        const right = readPinch(rightHand, 1);
         both = left && right;
       }
     }
@@ -1386,36 +1359,25 @@ const RENDER_COLOR = {
   colorSpace: THREE.SRGBColorSpace,
 } as const;
 
-function enforceRendererColor(gl: THREE.WebGLRenderer, warn = false) {
+function enforceRendererColor(gl: THREE.WebGLRenderer) {
   const changed =
     gl.toneMapping !== RENDER_COLOR.toneMapping ||
     Math.abs(gl.toneMappingExposure - RENDER_COLOR.exposure) > 0.0001 ||
     gl.outputColorSpace !== RENDER_COLOR.colorSpace;
   if (!changed) return;
-  if (warn && import.meta.env.DEV) {
-    console.warn('[SENAQUEST] Configuracao de cor do WebGLRenderer alterada; restaurando.', {
-      toneMapping: gl.toneMapping,
-      exposure: gl.toneMappingExposure,
-      outputColorSpace: gl.outputColorSpace,
-    });
-  }
   gl.toneMapping = RENDER_COLOR.toneMapping;
   gl.toneMappingExposure = RENDER_COLOR.exposure;
   gl.outputColorSpace = RENDER_COLOR.colorSpace;
 }
 
 /**
- * Verifica se uma biblioteca altera o renderizador durante a partida.
- * Faz o registro SOMENTE nas trocas de fase, para podermos diagnosticar
- * mudancas reais em luz, material ou renderer, sem logs por quadro.
- * O FPS so paga tres comparacoes de propriedades simples por quadro.
+ * Registra o estado visual somente nas trocas de fase durante o diagnóstico.
  */
-function RenderingConsistencyGuard() {
+function RenderingPhaseDiagnostics() {
   const { gl, scene, camera } = useThree();
   const phase = useGame((state) => state.phase);
   const lastPhase = useRef<string | null>(null);
   useFrame(() => {
-    enforceRendererColor(gl, true);
     if (!import.meta.env.DEV || lastPhase.current === phase) return;
     lastPhase.current = phase;
     const lights: Array<{
@@ -1469,20 +1431,7 @@ function SceneReadyProbe({ onReady }: { onReady: () => void }) {
   const reported = useRef(false);
   useFrame(() => {
     if (reported.current) return;
-    const wall = scene.getObjectByName('room-wall-back');
-    const desk = scene.getObjectByName('medical-desk-surface');
-    const imac = scene.getObjectByName('medical-desk-imac');
-    const healthDisabled =
-      typeof window !== 'undefined' &&
-      new URLSearchParams(window.location.search).get('healthModels') === 'off';
-    const healthModels = ['mesa', 'maca', 'trolley'];
-    const healthReady =
-      healthDisabled ||
-      healthModels.every((name) => {
-        const model = scene.getObjectByName(`health-user-model-${name}`);
-        return model && model.children.length > 0;
-      });
-    if (!wall || (!healthDisabled && (!desk || !imac)) || !healthReady) {
+    if (!isRoomMounted(scene)) {
       frames.current = 0;
       return;
     }
@@ -1538,12 +1487,16 @@ export function World({
         flat={false}
         onCreated={({ gl }) => enforceRendererColor(gl)}
         camera={{ position: [0, 1.91 + DESKTOP_CAMERA_HEIGHT_BONUS, 3.32], fov: 65 }}
-        gl={{ antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: false }}
+        gl={{
+          antialias: !mobileXR,
+          powerPreference: 'high-performance',
+          logarithmicDepthBuffer: false,
+        }}
       >
         {/* Luzes fora do XR: o spawn do tabuleiro nao pode remontar o rig luminoso. */}
         <StableRoomLighting />
         <XR store={xrStore}>
-          <RenderingConsistencyGuard />
+          <RenderingPhaseDiagnostics />
           <CalibratedXROrigin
             rollDegrees={effectiveRoll}
             onRollProbe={showRollDebug ? setRollProbe : undefined}

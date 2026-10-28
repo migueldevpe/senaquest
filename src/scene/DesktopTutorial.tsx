@@ -50,7 +50,14 @@ export function DesktopTutorial() {
         aria-describedby="sena-tutorial-description"
       >
         <header className="sena-tutorial-header">
-          <span className="sena-tutorial-eyebrow">SENAQUEST · COMO JOGAR</span>
+          <div className="sena-tutorial-brand">
+            <img
+              className="sena-tutorial-logo"
+              src="/branding/senaquest-logo-outline.webp"
+              alt="SenaQuest"
+            />
+            <span className="sena-tutorial-eyebrow">COMO JOGAR</span>
+          </div>
           <span className="sena-tutorial-count">
             {index + 1} / {DESKTOP_TUTORIAL_STEPS.length}
           </span>
