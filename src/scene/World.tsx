@@ -131,6 +131,7 @@ const PENALTY_BADGE_MATERIAL = new THREE.MeshBasicMaterial({
 });
 const BENEFIT_HOUSES = new Set([11, 18, 25]);
 const PENALTY_HOUSES = new Set([10, 12, 17, 19, 24, 26]);
+const BOARD_READY_TEXT_COUNT = 32;
 
 export const xrStore = createXRStore({
   controller: { rayPointer: true, grabPointer: false },
@@ -141,7 +142,6 @@ export const boardPosition = boardGridPosition;
 function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => void }) {
   const [x, , z] = boardPosition(n);
   const color = n === 30 ? '#16a58b' : COLORS[colorIndex(n)];
-  const isEvent = BENEFIT_HOUSES.has(n) || PENALTY_HOUSES.has(n);
   return (
     <group position={[x, BOARD_VISUAL.tileHeight, z]}>
       <RoundedBox
@@ -191,20 +191,6 @@ function Tile({ n, onTextReady }: { n: number; onTextReady: (key: string) => voi
       >
         {n}
       </Text>
-      {isEvent && (
-        <Text
-          font={POPPINS_3D}
-          onSync={() => onTextReady(`event-${n}`)}
-          position={[-0.355, 0.086, -0.355]}
-          rotation={[-Math.PI / 2, 0, 0]}
-          fontSize={0.25}
-          color="#102d4c"
-          anchorX="center"
-          anchorY="middle"
-        >
-          !
-        </Text>
-      )}
       {(n === 1 || n === 30) && (
         <Text
           font={POPPINS_3D}
@@ -371,7 +357,7 @@ function Board() {
   const onTextReady = useCallback((key: string) => {
     if (readyTexts.current.has(key)) return;
     readyTexts.current.add(key);
-    if (readyTexts.current.size >= 41) setTextsReady(true);
+    if (readyTexts.current.size >= BOARD_READY_TEXT_COUNT) setTextsReady(true);
   }, []);
   const revealed = !['choose', 'confirm', 'intro'].includes(phase);
   const canReveal = revealed && textsReady;
