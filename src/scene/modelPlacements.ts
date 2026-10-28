@@ -273,7 +273,7 @@ export const MODEL_PLACEMENTS = {
     maxDimensions: [2.6, 1.32, 0.16],
   },
   administration_printer: {
-    position: [-8.2, 0.01, -0.8],
+    position: [-7.4, 0.01, -0.675],
     rotationY: -Math.PI / 2,
     maxDimensions: [0.96, 0.76, 0.6],
   },
@@ -283,17 +283,17 @@ export const MODEL_PLACEMENTS = {
     maxDimensions: [1.42, 1.36, 0.6],
   },
   administration_telephone: {
-    position: [-6.55, 0.01, -2.4],
+    position: [-7.625, 0.01, -2.55],
     rotationY: 0,
     maxDimensions: [0.38, 0.28, 0.32],
   },
   administration_paper_stack: {
-    position: [-6.7, 0.01, -1.2],
+    position: [-7.4, 0.01, -1.25],
     rotationY: Math.PI / 2,
     maxDimensions: [0.7, 0.3, 0.54],
   },
   administration_stack_of_paper: {
-    position: [-8.15, 0.01, -2.15],
+    position: [-7.275, -0.415, -0.725],
     rotationY: Math.PI / 2,
     maxDimensions: [0.8, 0.1, 0.6],
   },
