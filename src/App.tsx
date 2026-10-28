@@ -18,7 +18,6 @@ import {
 import { useDiceTuning } from './scene/diceTuning';
 import { DesktopTutorial } from './scene/DesktopTutorial';
 import { useTutorial } from './scene/tutorialState';
-import { isTutorialComplete } from './scene/tutorialFlow';
 import { isBelowMinimumViewport, MINIMUM_VIEWPORT } from './minimumViewport';
 
 type AutoPhase =
@@ -172,18 +171,19 @@ function GameApp({
 }) {
   const game = useGame();
   const startTutorial = useTutorial((s) => s.start);
-  const offeredDesktopTutorial = useRef(false);
+  const [xrSessionActive, setXrSessionActive] = useState(() => xrStore.getState().session != null);
+  useEffect(
+    () =>
+      xrStore.subscribe((state) => {
+        setXrSessionActive(state.session != null);
+      }),
+    [],
+  );
   useEffect(() => {
-    if (!debugToolsReady || game.phase !== 'choose' || offeredDesktopTutorial.current) return;
-    offeredDesktopTutorial.current = true;
-    // Quest Browser opens the hand tutorial inside the headset, not behind XR.
-    if (
-      !/OculusBrowser|Quest/i.test(navigator.userAgent) &&
-      !isTutorialComplete('desktop') &&
-      !useTutorial.getState().mode
-    )
-      startTutorial('desktop');
-  }, [debugToolsReady, game.phase, startTutorial]);
+    if (!debugToolsReady || game.phase !== 'choose' || xrSessionActive) return;
+    if (/OculusBrowser|Quest/i.test(navigator.userAgent)) return;
+    if (useTutorial.getState().mode !== 'desktop') startTutorial('desktop');
+  }, [debugToolsReady, game.phase, game.players, startTutorial, xrSessionActive]);
   const [debugOpen, setDebugOpen] = useState(false);
   const [audioBlocked, setAudioBlocked] = useState(isBackgroundMusicBlocked);
   useEffect(() => {

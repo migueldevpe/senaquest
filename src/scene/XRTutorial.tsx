@@ -246,12 +246,14 @@ function paragraph(
 /** Autoabre ao entrar no XR, inclusive se o evento de início anteceder a montagem do Canvas. */
 export function XRSessionTutorialTrigger() {
   const { gl } = useThree();
+  const phase = useGame((state) => state.phase);
+  const players = useGame((state) => state.players);
   const handledSession = useRef(false);
   useEffect(() => {
     const begin = () => {
-      if (handledSession.current) return;
       const phase = useGame.getState().phase;
-      if (phase !== 'choose' && phase !== 'confirm') return;
+      if (!gl.xr.isPresenting || (phase !== 'choose' && phase !== 'confirm')) return;
+      if (handledSession.current) return;
       const state = useTutorial.getState();
       if (state.mode === 'vr') {
         handledSession.current = true;
@@ -277,18 +279,21 @@ export function XRSessionTutorialTrigger() {
       gl.xr.removeEventListener('sessionend', finish);
     };
   }, [gl]);
-  useFrame(() => {
-    // Fallback para quando o WebXR iniciou antes do listener ser registrado.
-    if (!handledSession.current && gl.xr.isPresenting) {
-      const phase = useGame.getState().phase;
-      if (phase === 'choose' || phase === 'confirm') {
-        const state = useTutorial.getState();
-        if (state.mode === 'desktop') state.end(false);
-        handledSession.current = true;
-        if (useTutorial.getState().mode !== 'vr') useTutorial.getState().start('vr');
-      }
+  useEffect(() => {
+    if (phase !== 'choose' && phase !== 'confirm') {
+      handledSession.current = false;
+      return;
     }
-  });
+    if (gl.xr.isPresenting) {
+      const state = useTutorial.getState();
+      if (state.mode === 'desktop') state.end(false);
+      if (state.mode !== 'vr') {
+        handledSession.current = false;
+        useTutorial.getState().start('vr');
+      }
+      handledSession.current = true;
+    }
+  }, [gl, phase, players]);
   return null;
 }
 

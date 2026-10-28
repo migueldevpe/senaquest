@@ -750,6 +750,39 @@ const DESKTOP_CAMERA_HEIGHT_BONUS = 0.2;
 const VR_CAMERA_HEIGHT_BONUS = 0.6;
 const VR_TARGET_INITIAL_EYE_HEIGHT = 1.9;
 const VR_MAX_CALIBRATION_ADJUSTMENT = 0.2;
+const XR_UI_WARMUP_FRAMES = 12;
+
+// Let the immersive framebuffer render the room before mounting CanvasTexture-based overlays.
+function XRSessionWarmup({ children }: { children: React.ReactNode }) {
+  const { gl } = useThree();
+  const [ready, setReady] = useState(!gl.xr.isPresenting);
+  const frames = useRef(0);
+
+  useEffect(() => {
+    const start = () => {
+      frames.current = 0;
+      setReady(false);
+    };
+    const end = () => {
+      frames.current = 0;
+      setReady(true);
+    };
+    gl.xr.addEventListener('sessionstart', start);
+    gl.xr.addEventListener('sessionend', end);
+    if (gl.xr.isPresenting) start();
+    return () => {
+      gl.xr.removeEventListener('sessionstart', start);
+      gl.xr.removeEventListener('sessionend', end);
+    };
+  }, [gl]);
+
+  useFrame(() => {
+    if (ready || !gl.xr.isPresenting) return;
+    if (++frames.current >= XR_UI_WARMUP_FRAMES) setReady(true);
+  });
+
+  return ready ? children : null;
+}
 
 // Calibra apenas uma vez por sessão, mantendo os movimentos reais da cabeça.
 function CalibratedXROrigin({
@@ -1489,8 +1522,10 @@ export function World({
           />
           <XRMusicUnlock />
           <XRSessionTutorialTrigger />
-          <XRTutorial />
-          <VRInterface />
+          <XRSessionWarmup>
+            <XRTutorial />
+            <VRInterface />
+          </XRSessionWarmup>
           <Classroom />
           <Board />
         </XR>
